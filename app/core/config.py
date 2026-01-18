@@ -7,6 +7,8 @@ class Settings(BaseSettings):
 
     upbit_access_key: str | None = None
     upbit_secret_key: str | None = None
+    upbit_base_url: str = "https://api.upbit.com"
+    upbit_timeout: float = 10.0
 
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
