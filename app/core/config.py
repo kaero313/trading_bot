@@ -1,0 +1,17 @@
+﻿from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    app_name: str = "trading-bot"
+    log_level: str = "INFO"
+
+    upbit_access_key: str | None = None
+    upbit_secret_key: str | None = None
+
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+
+settings = Settings()

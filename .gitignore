@@ -5,9 +5,24 @@ __pycache__/
 
 # Env
 .env
+.env.*
+!.env.example
 
 # Logs
 *.log
+logs/
 
 # DB
 *.db
+*.sqlite
+*.sqlite3
+data/
+
+# Secrets / keys
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
