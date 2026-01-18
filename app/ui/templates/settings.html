@@ -1,0 +1,39 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Settings</h1>
+  <p>Define symbols, allocations, strategy params, risk, and schedule.</p>
+
+  <div class="form-grid">
+    <div class="field">
+      <label>Symbols (KRW)</label>
+      <input type="text" placeholder="KRW-BTC, KRW-ETH" />
+    </div>
+    <div class="field">
+      <label>Allocation per Symbol</label>
+      <input type="text" placeholder="0.5, 0.5" />
+    </div>
+    <div class="field">
+      <label>EMA Fast / Slow</label>
+      <input type="text" placeholder="12 / 26" />
+    </div>
+    <div class="field">
+      <label>RSI / Min</label>
+      <input type="text" placeholder="14 / 50" />
+    </div>
+    <div class="field">
+      <label>Trailing Stop (%)</label>
+      <input type="text" placeholder="3" />
+    </div>
+    <div class="field">
+      <label>Daily Loss Limit (%)</label>
+      <input type="text" placeholder="5" />
+    </div>
+    <div class="field">
+      <label>Trading Window</label>
+      <input type="text" placeholder="Always on" />
+    </div>
+  </div>
+  <button class="btn">Save</button>
+</section>
+{% endblock %}

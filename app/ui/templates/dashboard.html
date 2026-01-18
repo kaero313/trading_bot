@@ -1,0 +1,33 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div class="hero-text">
+    <h1>Live control for Upbit KRW trading.</h1>
+    <p>Configure symbols, risk, and schedules. Monitor PnL and execution in real time.</p>
+  </div>
+  <div class="hero-card">
+    <div class="label">Bot Status</div>
+    <div class="value">Stopped</div>
+    <div class="meta">Last heartbeat: --</div>
+    <button class="btn">Start Bot</button>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <div class="label">Allocated Capital</div>
+    <div class="value">10% of equity</div>
+    <div class="meta">Daily loss limit: 5%</div>
+  </div>
+  <div class="card">
+    <div class="label">Positions</div>
+    <div class="value">0 open</div>
+    <div class="meta">Max concurrent: 3</div>
+  </div>
+  <div class="card">
+    <div class="label">Strategy</div>
+    <div class="value">EMA 12/26 + RSI 14</div>
+    <div class="meta">Trailing stop: 3%</div>
+  </div>
+</section>
+{% endblock %}
