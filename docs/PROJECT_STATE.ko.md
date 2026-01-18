@@ -8,6 +8,11 @@
 - 1시간봉 기반 24시간 매매
 - 웹 UI + 텔레그램 제어/알림
 
+## 1.1) 실행 환경 전제
+- OS: Windows (PowerShell)
+- Python: 3.11+
+- 실행: 로컬 머신
+
 ## 2) 확정된 요구사항
 - 거래소: 업비트
 - 마켓: KRW만
@@ -34,6 +39,8 @@
 ## 5) 문서
 - v1 스펙(영문): `docs/v1-spec.md`
 - v1 스펙(국문): `docs/v1-spec.ko.md`
+- API 레퍼런스(국문): `docs/API_REFERENCE.ko.md`
+- 아키텍처(국문): `docs/ARCHITECTURE.ko.md`
 
 ## 6) 현재 코드 상태 (스캐폴딩 완료)
 ### 주요 파일
@@ -42,7 +49,7 @@
 - API 엔드포인트: `app/api/routes/*.py`
 - 설정/상태: `app/core/config.py`, `app/core/state.py`
 - 스키마: `app/models/schemas.py`
-- 서비스: `app/services/upbit_client.py`(JWT 인증 포함), `app/services/telegram.py`(스텁)
+- 서비스: `app/services/upbit_client.py`(JWT 인증/주문·잔고/에러 변환), `app/services/telegram.py`(스텁)
 - UI: `app/ui/routes.py`, `app/ui/templates/*.html`, `app/ui/static/style.css`
 - 프로젝트 설정: `pyproject.toml`, `README.md`, `.env.example`, `.gitignore`
 
@@ -52,6 +59,7 @@
 - UI 템플릿(대시보드/설정) 정적 화면 구성
 - Upbit 개인 API 클라이언트(JWT 서명 + 주문/잔고 엔드포인트) 구현 완료
 - Upbit 조회용 API 라우트 추가(`/api/upbit/*`)
+- Upbit 오류를 HTTP 상태/메시지로 명확히 반환
 - Telegram은 아직 수신/제어 로직 없음
 
 ### 실행 방법 (로컬)
@@ -62,25 +70,33 @@ pip install -e .
 uvicorn app.main:app --reload
 ```
 
+### 최근 테스트 결과
+- Upbit 조회 API 정상 응답 확인 (IP 제한 해결 후)
+  - `/api/upbit/accounts`, `/api/upbit/orders/open`, `/api/upbit/orders/closed`
+
+### 테스트/운영 중 참고사항
+- Upbit Open API는 IP 화이트리스트를 사용하는 경우가 있어, 등록된 공인 IP에서만 호출 가능
+- IP 변경 시 401 `no_authorization_ip` 오류가 발생할 수 있음
+
 ## 7) 보안/깃 관리
 - 실제 키는 `.env`에만 저장 (깃 제외)
 - `.gitignore`에 민감/로그/DB/키 파일 패턴 추가됨
 - 현재 민감 정보 파일 없음
 
 ## 8) 다음 해야 할 일 (우선순위)
-1) **Upbit API 실제 연동/검증**
-   - 실제 키로 테스트 호출(잔고/주문 조회)
-   - 레이트리밋/에러 처리 강화
-2) **텔레그램 제어/알림 구현**
+1) **텔레그램 제어/알림 구현**
    - 롱폴링 수신 (getUpdates)
    - 명령 파서 (/start, /stop, /status, /balance, /pnl, /buy, /sell, /setrisk)
-3) **전략/리스크 엔진**
+2) **전략/리스크 엔진**
    - EMA/RSI 계산, 진입/청산
    - 트레일링 스탑
    - 일일 손실 한도 체크
-4) **UI 설정 저장/로드**
+3) **UI 설정 저장/로드**
    - UI 폼 → `/api/config` 연동
    - 설정 값 유효성 검증
+4) **주문/취소 연동 및 안전장치**
+   - 주문 생성/취소 함수 실제 사용 경로 추가
+   - 실매매 보호(확인, 최소 주문 금액, 슬리피지 제한)
 
 ## 9) 오픈 질문 (추후 확정 필요)
 - 실제 운용 대상 종목 기본 리스트

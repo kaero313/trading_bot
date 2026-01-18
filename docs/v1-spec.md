@@ -54,7 +54,8 @@ All parameters are configurable in UI.
 
 ## 8) Data & Storage
 - Market data: WebSocket ticker + REST candles
-- Private data: WebSocket myAsset/myOrder + REST for orders
+- Private data: WebSocket myAsset/myOrder + REST for orders/accounts
+- Auth: JWT (access_key + nonce) with query_hash for signed params
 - Storage: SQLite
   - tables: orders, fills, positions, balances, signals, settings, logs
 
@@ -77,16 +78,31 @@ All parameters are configurable in UI.
   - POST /bot/stop
   - GET /positions
   - GET /orders
+- Upbit test endpoints (dev):
+  - GET /api/upbit/accounts
+  - GET /api/upbit/order?uuid=... or identifier=...
+  - GET /api/upbit/orders/open
+  - GET /api/upbit/orders/closed
+  - GET /api/upbit/orders/uuids?uuids=...
 
-## 11) Scheduling
+## 11) Config (Environment)
+- `.env` values:
+  - UPBIT_ACCESS_KEY
+  - UPBIT_SECRET_KEY
+  - UPBIT_BASE_URL (default: https://api.upbit.com)
+  - UPBIT_TIMEOUT (default: 10)
+  - TELEGRAM_BOT_TOKEN
+  - TELEGRAM_CHAT_ID
+
+## 12) Scheduling
 - Default: 24/7
 - Optional trading window config (start/end hours)
 
-## 12) Logging & Observability
+## 13) Logging & Observability
 - Structured logs to file
 - Error alerts to Telegram
 - Daily summary message
 
-## 13) Safety Switches
+## 14) Safety Switches
 - Dry-run (paper) mode toggle
 - Manual kill switch in UI and Telegram

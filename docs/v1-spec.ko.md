@@ -55,6 +55,7 @@
 ## 8) 데이터/저장
 - 시세: WebSocket 실시간 + REST 캔들
 - 계정/주문: WebSocket(myAsset, myOrder) + REST
+- 인증: JWT(access_key + nonce) + 요청 파라미터 hash(query_hash)
 - 저장소: SQLite
   - orders, fills, positions, balances, signals, settings, logs
 
@@ -77,16 +78,31 @@
   - POST /bot/stop
   - GET /positions
   - GET /orders
+- Upbit 테스트 엔드포인트(개발용):
+  - GET /api/upbit/accounts
+  - GET /api/upbit/order?uuid=... 또는 identifier=...
+  - GET /api/upbit/orders/open
+  - GET /api/upbit/orders/closed
+  - GET /api/upbit/orders/uuids?uuids=...
 
-## 11) 스케줄
+## 11) 환경 변수
+- `.env` 값:
+  - UPBIT_ACCESS_KEY
+  - UPBIT_SECRET_KEY
+  - UPBIT_BASE_URL (기본: https://api.upbit.com)
+  - UPBIT_TIMEOUT (기본: 10)
+  - TELEGRAM_BOT_TOKEN
+  - TELEGRAM_CHAT_ID
+
+## 12) 스케줄
 - 기본: 24시간
 - 선택: 시간대 제한 설정
 
-## 12) 로깅/관측
+## 13) 로깅/관측
 - 구조화 로그 파일
 - 텔레그램 오류 알림
 - 일일 요약 알림
 
-## 13) 안전 장치
+## 14) 안전 장치
 - 모의거래(드라이런) 모드
 - UI/텔레그램 즉시 중지 스위치
