@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.core.logging import configure_logging
+from app.services.slack_socket import slack_socket_service
 from app.ui.routes import router as ui_router
 from app.services.telegram_bot import telegram_bot
 
@@ -18,10 +19,12 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def _startup() -> None:
         await telegram_bot.start()
+        await slack_socket_service.start()
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
         await telegram_bot.stop()
+        await slack_socket_service.stop()
 
     return app
 
