@@ -99,6 +99,9 @@ All parameters are configurable in UI.
   - TELEGRAM_CHAT_ID
   - SLACK_WEBHOOK_URL
   - SLACK_TIMEOUT (default: 10)
+  - SLACK_BOT_TOKEN
+  - SLACK_APP_TOKEN
+  - SLACK_SIGNING_SECRET
 
 ## 12) Scheduling
 - Default: 24/7

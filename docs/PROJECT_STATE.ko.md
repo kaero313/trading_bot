@@ -67,6 +67,7 @@
   - /pnl, /positions는 아직 미구현 메시지
 - Slack Incoming Webhook 알림 전송 + 테스트 API `/api/slack/test` 추가
 - `pip install -e .` 동작을 위해 패키지 디스커버리 설정 추가(`logs/` 제외)
+- Slack Socket Mode 연동을 위한 환경 변수 키 추가(xoxb/xapp)
 
 ### 실행 방법 (로컬)
 ```bash
@@ -130,6 +131,9 @@ TELEGRAM_CHAT_ID=
 
 SLACK_WEBHOOK_URL=
 SLACK_TIMEOUT=10
+SLACK_BOT_TOKEN=
+SLACK_APP_TOKEN=
+SLACK_SIGNING_SECRET=
 ```
 
 ---
