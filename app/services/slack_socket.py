@@ -206,8 +206,8 @@ class SlackSocketService:
             await self._post_message(channel, "표시할 잔고가 없습니다.")
             return
 
-        price_map = await self._load_prices(balances)
-        lines = self._format_balances(balances, price_map)
+        price_map, valid_markets = await self._load_prices(balances)
+        lines = self._format_balances(balances, price_map, valid_markets)
         await self._post_message(channel, "\n".join(lines))
 
     def _extract_balances(self, accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -231,27 +231,54 @@ class SlackSocketService:
             )
         return results
 
-    async def _load_prices(self, balances: list[dict[str, Any]]) -> dict[str, float]:
-        markets = [f"KRW-{b['currency']}" for b in balances if b["currency"] != "KRW"]
+    async def _load_prices(
+        self, balances: list[dict[str, Any]]
+    ) -> tuple[dict[str, float], set[str] | None]:
+        markets = []
+        for item in balances:
+            if item["currency"] == "KRW":
+                continue
+            if item["unit_currency"] != "KRW":
+                continue
+            markets.append(f"KRW-{item['currency']}")
+        markets = list(dict.fromkeys(markets))
         if not markets:
-            return {}
+            return {}, None
+
+        valid_markets: set[str] | None = None
+        try:
+            market_list = await upbit_client.get_markets()
+            valid_markets = {
+                item.get("market")
+                for item in market_list
+                if isinstance(item, dict) and isinstance(item.get("market"), str)
+            }
+        except UpbitAPIError as exc:
+            logger.warning("Upbit market list error: %s", exc)
+
+        if valid_markets is not None:
+            markets = [market for market in markets if market in valid_markets]
+            if not markets:
+                return {}, valid_markets
+
         try:
             tickers = await upbit_client.get_ticker(markets)
         except UpbitAPIError as exc:
             logger.warning("Upbit ticker error: %s", exc)
-            return {}
+            return {}, valid_markets
         price_map: dict[str, float] = {}
         for item in tickers:
             market = item.get("market")
             price = item.get("trade_price")
             if market and price is not None:
                 price_map[market] = float(price)
-        return price_map
+        return price_map, valid_markets
 
     def _format_balances(
         self,
         balances: list[dict[str, Any]],
         price_map: dict[str, float],
+        valid_markets: set[str] | None,
     ) -> list[str]:
         summary_lines = ["[잔고 요약]"]
         detail_lines = ["[보유 코인]"]
@@ -281,15 +308,25 @@ class SlackSocketService:
             else:
                 line += " | 평균단가 -"
 
-            market = f"KRW-{currency}"
-            price = price_map.get(market)
-            if price:
-                value = price * total
-                coin_value += value
-                line += f" | 추정 {self._fmt_krw(value)} KRW"
+            if unit_currency == "KRW":
+                market = f"KRW-{currency}"
+                if valid_markets is not None and market not in valid_markets:
+                    unknown_symbols.append(currency)
+                    line += " | 추정 - (KRW 마켓 없음)"
+                    detail_lines.append(line)
+                    continue
+
+                price = price_map.get(market)
+                if price:
+                    value = price * total
+                    coin_value += value
+                    line += f" | 추정 {self._fmt_krw(value)} KRW"
+                else:
+                    unknown_symbols.append(currency)
+                    line += " | 추정 -"
             else:
-                unknown_symbols.append(currency)
-                line += " | 추정 -"
+                unknown_symbols.append(f"{currency}({unit_currency})")
+                line += f" | 추정 - (단위 {unit_currency})"
 
             detail_lines.append(line)
 
