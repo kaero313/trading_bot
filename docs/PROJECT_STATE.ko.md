@@ -22,6 +22,7 @@
 - 일일 손실 한도: 5% (당일 시작 시점의 봇 할당 자본 기준)
 - UI에서 설정 가능 항목: 종목/비중/전략 파라미터/리스크/스케줄
 - 텔레그램: 명령 수신 + 잔고/수익률/체결 결과 메시지
+- Slack: 알림 전송(웹훅, 선택)
 
 ## 3) 기본 전략 (v1 제안)
 - EMA(12/26) 교차 + RSI(14) 필터 추세추종
@@ -49,7 +50,7 @@
 - API 엔드포인트: `app/api/routes/*.py`
 - 설정/상태: `app/core/config.py`, `app/core/state.py`
 - 스키마: `app/models/schemas.py`
-- 서비스: `app/services/upbit_client.py`(JWT 인증/주문·잔고/에러 변환), `app/services/telegram.py`(송수신), `app/services/telegram_bot.py`(폴링/명령 처리)
+- 서비스: `app/services/upbit_client.py`(JWT 인증/주문·잔고/에러 변환), `app/services/telegram.py`(송수신), `app/services/telegram_bot.py`(폴링/명령 처리), `app/services/slack.py`(웹훅 알림)
 - UI: `app/ui/routes.py`, `app/ui/templates/*.html`, `app/ui/static/style.css`
 - 프로젝트 설정: `pyproject.toml`, `README.md`, `.env.example`, `.gitignore`
 
@@ -64,6 +65,8 @@
   - /start, /stop, /status, /balance, /pnl, /positions, /setrisk, /help
   - /balance는 Upbit 계좌 조회 연동
   - /pnl, /positions는 아직 미구현 메시지
+- Slack Incoming Webhook 알림 전송 + 테스트 API `/api/slack/test` 추가
+- `pip install -e .` 동작을 위해 패키지 디스커버리 설정 추가(`logs/` 제외)
 
 ### 실행 방법 (로컬)
 ```bash
@@ -76,6 +79,8 @@ uvicorn app.main:app --reload
 ### 최근 테스트 결과
 - Upbit 조회 API 정상 응답 확인 (IP 제한 해결 후)
   - `/api/upbit/accounts`, `/api/upbit/orders/open`, `/api/upbit/orders/closed`
+- Slack 알림 테스트 성공
+  - `/api/slack/test`
 
 ### 테스트/운영 중 참고사항
 - Upbit Open API는 IP 화이트리스트를 사용하는 경우가 있어, 등록된 공인 IP에서만 호출 가능
@@ -90,14 +95,17 @@ uvicorn app.main:app --reload
 1) **텔레그램 기능 보강**
    - /buy, /sell, /config 등 확장
    - 체결/오류 알림 자동 발송
-2) **전략/리스크 엔진**
+2) **Slack 알림 확장**
+   - 체결/오류/일일 요약 자동 발송 연결
+   - 템플릿/포맷 통일
+3) **전략/리스크 엔진**
    - EMA/RSI 계산, 진입/청산
    - 트레일링 스탑
    - 일일 손실 한도 체크
-3) **UI 설정 저장/로드**
+4) **UI 설정 저장/로드**
    - UI 폼 → `/api/config` 연동
    - 설정 값 유효성 검증
-4) **주문/취소 연동 및 안전장치**
+5) **주문/취소 연동 및 안전장치**
    - 주문 생성/취소 함수 실제 사용 경로 추가
    - 실매매 보호(확인, 최소 주문 금액, 슬리피지 제한)
 
@@ -119,7 +127,10 @@ UPBIT_TIMEOUT=10
 
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
+
+SLACK_WEBHOOK_URL=
+SLACK_TIMEOUT=10
 ```
 
 ---
-마지막 업데이트: 2026-01-21
+마지막 업데이트: 2026-01-24

@@ -167,7 +167,25 @@
 
 ---
 
-# 4) 실행/테스트 예시
+# 4) Slack 알림 테스트 API
+
+## POST /api/slack/test
+- 설명: Slack Incoming Webhook으로 테스트 메시지 전송
+- 필요 설정: `.env`의 `SLACK_WEBHOOK_URL` 또는 요청 바디 `webhook_url`
+- Swagger에서 테스트 시 `webhook_url`을 비우거나 `null`로 두면 `.env` 값이 사용됨
+- 요청 바디:
+  - `text` (str, optional): 보낼 메시지 (기본값 있음)
+  - `webhook_url` (str, optional): 요청별 웹훅 URL
+  - `username` (str, optional): 표시 이름
+  - `icon_emoji` (str, optional): 이모지 아이콘 (예: `:robot_face:`)
+- 응답 예시:
+```json
+{"ok": true}
+```
+
+---
+
+# 5) 실행/테스트 예시
 
 ```powershell
 # 서버 실행
@@ -175,11 +193,14 @@ uvicorn app.main:app --reload
 
 # 계좌 조회
 Invoke-RestMethod http://127.0.0.1:8000/api/upbit/accounts
+
+# Slack 테스트
+Invoke-RestMethod http://127.0.0.1:8000/api/slack/test -Method Post -ContentType "application/json" -Body '{"text":"Slack 연동 테스트"}'
 ```
 
 ---
 
-# 5) 텔레그램 명령 (봇)
+# 6) 텔레그램 명령 (봇)
 
 텔레그램 봇 토큰/채팅 ID 설정 시, 아래 명령을 받을 수 있습니다.
 

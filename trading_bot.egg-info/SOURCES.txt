@@ -9,6 +9,7 @@ app/api/routes/config.py
 app/api/routes/health.py
 app/api/routes/orders.py
 app/api/routes/positions.py
+app/api/routes/slack.py
 app/api/routes/status.py
 app/api/routes/upbit.py
 app/core/__init__.py
@@ -19,7 +20,9 @@ app/models/__init__.py
 app/models/schemas.py
 app/services/__init__.py
 app/services/bot_service.py
+app/services/slack.py
 app/services/telegram.py
+app/services/telegram_bot.py
 app/services/upbit_client.py
 app/ui/__init__.py
 app/ui/routes.py

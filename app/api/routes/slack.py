@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 
 from app.services.slack import slack_client
 
@@ -8,9 +9,22 @@ router = APIRouter()
 
 class SlackTestRequest(BaseModel):
     text: str = Field(default="Trading bot Slack test message.")
-    webhook_url: str | None = None
+    webhook_url: str | None = Field(
+        default=None,
+        description="Override webhook URL (leave empty to use SLACK_WEBHOOK_URL).",
+    )
     username: str | None = None
     icon_emoji: str | None = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "text": "Slack 연동 테스트",
+                }
+            ]
+        }
+    )
 
 
 class SlackTestResponse(BaseModel):

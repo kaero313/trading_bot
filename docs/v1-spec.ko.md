@@ -7,6 +7,7 @@
 - 업비트 KRW 현물 자동 매매
 - 종목/비중/전략 파라미터/리스크/스케줄을 UI에서 설정
 - 텔레그램 제어 및 알림
+- Slack Incoming Webhook 알림(선택)
 - 안정적인 리스크 관리와 로깅
 - 로컬 실행 + 경량 저장소 사용
 
@@ -65,6 +66,9 @@
 - 발신 알림:
   - 주문/체결/취소, 일일 손익, 오류
 
+### 9.1) Slack 알림(선택)
+- Incoming Webhook 기반 알림 전송
+
 ## 10) FastAPI UI & API
 - UI 화면:
   - 대시보드(봇 상태/잔고/손익)
@@ -93,6 +97,8 @@
   - UPBIT_TIMEOUT (기본: 10)
   - TELEGRAM_BOT_TOKEN
   - TELEGRAM_CHAT_ID
+  - SLACK_WEBHOOK_URL
+  - SLACK_TIMEOUT (기본: 10)
 
 ## 12) 스케줄
 - 기본: 24시간
@@ -101,6 +107,7 @@
 ## 13) 로깅/관측
 - 구조화 로그 파일
 - 텔레그램 오류 알림
+- Slack 알림(선택)
 - 일일 요약 알림
 
 ## 14) 안전 장치

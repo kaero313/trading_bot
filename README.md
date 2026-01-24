@@ -27,5 +27,9 @@ Requires `.env` with `UPBIT_ACCESS_KEY` and `UPBIT_SECRET_KEY`.
 - GET `/api/upbit/orders/open`
 - GET `/api/upbit/orders/closed`
 
+### Slack test endpoint
+Requires `.env` with `SLACK_WEBHOOK_URL` (or pass `webhook_url` in body).
+- POST `/api/slack/test`
+
 ## Config
 Copy `.env.example` to `.env` and fill in keys.

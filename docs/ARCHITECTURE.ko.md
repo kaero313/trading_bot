@@ -8,9 +8,9 @@
 
 ```
 [사용자]
-  | UI/브라우저            | 텔레그램(예정)
+  | UI/브라우저            | 텔레그램/Slack
   v                        v
-[FastAPI 서버]  <-->  [텔레그램 Bot 서비스]
+[FastAPI 서버]  <-->  [메신저 Bot/알림 서비스]
   |
   | (Upbit 테스트 API)
   v
@@ -18,8 +18,8 @@
 ```
 
 - 현재는 FastAPI 서버가 핵심이며, UI와 API를 동시에 제공합니다.
-- 텔레그램 제어/알림은 다음 단계에서 붙일 예정입니다.
 - 텔레그램 폴링 기반 명령 처리(기본 명령)는 구현됨.
+- Slack은 Incoming Webhook 기반 알림 전송을 지원합니다.
 - Upbit 개인 API는 인증(JWT)까지 연결되어 있고, **조회 테스트**가 가능합니다.
 
 ---
@@ -66,6 +66,7 @@ app/
     upbit_client.py      # Upbit REST 클라이언트 (JWT 인증 포함)
     telegram.py          # Telegram 클라이언트(송/수신)
     telegram_bot.py      # Telegram 폴링/명령 처리
+    slack.py             # Slack Incoming Webhook 알림
   ui/
     routes.py            # UI 라우터
     templates/           # HTML 템플릿
@@ -98,7 +99,11 @@ docs/                    # 문서
 - getUpdates 롱폴링으로 명령 수신
 - /start, /stop, /status, /balance, /pnl, /positions, /setrisk, /help 처리
 
-### 4.5 UI (`app/ui`)
+### 4.5 Slack (`app/services/slack.py`)
+- Incoming Webhook으로 메시지 전송
+- `/api/slack/test`로 연동 테스트 가능
+
+### 4.6 UI (`app/ui`)
 - 대시보드: 현재는 정적 화면
 - 설정 화면: 향후 `/api/config`와 연동 예정
 
@@ -138,14 +143,18 @@ GET /api/upbit/accounts -> UpbitClient -> Upbit REST API
 - `app/services/telegram.py` 확장
 - 메시지 수신(getUpdates) + 명령 파서 추가
 
-### 7.2 전략/리스크 엔진
+### 7.2 Slack 알림 확장
+- Incoming Webhook 기반 알림 템플릿/포맷 추가
+- 이벤트(체결/오류/일일 요약) 자동 발송 연동
+
+### 7.3 전략/리스크 엔진
 - 새로운 서비스 모듈 추가 예정
   - `strategy/` (EMA/RSI 계산)
   - `risk/` (포지션 사이징, 손실 한도)
   - `executor/` (주문 실행/취소)
 - 메인 루프 또는 백그라운드 작업으로 실행
 
-### 7.3 데이터 저장
+### 7.4 데이터 저장
 - SQLite 연동
 - 포지션/체결/로그/설정 영속화
 

@@ -7,6 +7,7 @@ Build a local Python + FastAPI trading bot for Upbit KRW spot markets. The bot r
 - Automated trading on Upbit KRW spot markets
 - User-configurable UI for symbols, allocation, strategy params, risk, schedule
 - Telegram control and notifications
+- Slack notifications via incoming webhook (optional)
 - Robust risk controls and logging
 - Local execution with lightweight storage
 
@@ -65,6 +66,9 @@ All parameters are configurable in UI.
 - Send notifications:
   - order placed/filled/canceled, daily PnL, errors
 
+### 9.1) Slack Notifications (optional)
+- Send alert messages via Slack incoming webhook
+
 ## 10) FastAPI UI & API
 - UI pages (minimal):
   - Dashboard: bot status, balance, PnL
@@ -93,6 +97,8 @@ All parameters are configurable in UI.
   - UPBIT_TIMEOUT (default: 10)
   - TELEGRAM_BOT_TOKEN
   - TELEGRAM_CHAT_ID
+  - SLACK_WEBHOOK_URL
+  - SLACK_TIMEOUT (default: 10)
 
 ## 12) Scheduling
 - Default: 24/7
@@ -101,6 +107,7 @@ All parameters are configurable in UI.
 ## 13) Logging & Observability
 - Structured logs to file
 - Error alerts to Telegram
+- Optional alerts to Slack
 - Daily summary message
 
 ## 14) Safety Switches
