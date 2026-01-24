@@ -185,7 +185,17 @@
 
 ---
 
-# 5) 실행/테스트 예시
+# 5) Slack Socket Mode (로컬)
+- 목적: Slack 메시지 수신(앱 멘션/DM) → Upbit 연동 응답
+- 필요 설정: `.env`의 `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`
+- 지원 명령(기본):
+  - `잔고` / `balance` : 업비트 잔고 요약
+  - `status` : 봇 상태
+  - `help` : 도움말
+
+---
+
+# 6) 실행/테스트 예시
 
 ```powershell
 # 서버 실행
@@ -200,7 +210,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/slack/test -Method Post -ContentType
 
 ---
 
-# 6) 텔레그램 명령 (봇)
+# 7) 텔레그램 명령 (봇)
 
 텔레그램 봇 토큰/채팅 ID 설정 시, 아래 명령을 받을 수 있습니다.
 

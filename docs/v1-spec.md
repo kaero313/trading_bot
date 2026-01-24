@@ -68,6 +68,7 @@ All parameters are configurable in UI.
 
 ### 9.1) Slack Notifications (optional)
 - Send alert messages via Slack incoming webhook
+- Local Socket Mode can receive commands via DM/mention
 
 ## 10) FastAPI UI & API
 - UI pages (minimal):

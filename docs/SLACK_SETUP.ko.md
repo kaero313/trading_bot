@@ -1,0 +1,31 @@
+# Slack 로컬(Socket Mode) 설정 가이드
+
+로컬 환경에서 Slack 메시지를 수신하려면 **Socket Mode**를 사용합니다.
+
+## 1) Slack App 설정
+1. Slack App 생성 → 워크스페이스에 설치
+2. **Socket Mode 활성화**
+   - App-Level Token 생성 → 권한: `connections:write`
+3. **Bot Token Scopes 추가**
+   - `chat:write` (응답 메시지 전송)
+   - `app_mentions:read` (앱 멘션 수신)
+   - `im:history` (DM 수신)
+4. **Event Subscriptions 활성화**
+   - Events에 `app_mention`, `message.im` 추가
+
+## 2) 로컬 .env 설정
+```
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+```
+
+## 3) 실행
+```
+uvicorn app.main:app --reload
+```
+
+## 4) 사용 예시
+- DM 또는 채널 멘션에서:
+  - `잔고` / `balance`
+  - `status`
+  - `help`

@@ -42,6 +42,7 @@
 - v1 스펙(국문): `docs/v1-spec.ko.md`
 - API 레퍼런스(국문): `docs/API_REFERENCE.ko.md`
 - 아키텍처(국문): `docs/ARCHITECTURE.ko.md`
+- Slack 설정 가이드(국문): `docs/SLACK_SETUP.ko.md`
 
 ## 6) 현재 코드 상태 (스캐폴딩 완료)
 ### 주요 파일
@@ -68,6 +69,8 @@
 - Slack Incoming Webhook 알림 전송 + 테스트 API `/api/slack/test` 추가
 - `pip install -e .` 동작을 위해 패키지 디스커버리 설정 추가(`logs/` 제외)
 - Slack Socket Mode 연동을 위한 환경 변수 키 추가(xoxb/xapp)
+- Slack Socket Mode 메시지 수신(앱 멘션/DM) + 잔고/상태/도움말 응답
+- Slack Socket Mode 의존성 추가(`slack-sdk`, `aiohttp`)
 
 ### 실행 방법 (로컬)
 ```bash
@@ -96,7 +99,7 @@ uvicorn app.main:app --reload
 1) **텔레그램 기능 보강**
    - /buy, /sell, /config 등 확장
    - 체결/오류 알림 자동 발송
-2) **Slack 알림 확장**
+2) **Slack 알림/명령 확장**
    - 체결/오류/일일 요약 자동 발송 연결
    - 템플릿/포맷 통일
 3) **전략/리스크 엔진**

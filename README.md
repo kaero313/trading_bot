@@ -19,6 +19,7 @@ uvicorn app.main:app --reload
 Open:
 - UI: http://127.0.0.1:8000/
 - API docs: http://127.0.0.1:8000/docs
+- Slack setup: docs/SLACK_SETUP.ko.md
 
 ### Upbit test endpoints
 Requires `.env` with `UPBIT_ACCESS_KEY` and `UPBIT_SECRET_KEY`.
@@ -30,6 +31,10 @@ Requires `.env` with `UPBIT_ACCESS_KEY` and `UPBIT_SECRET_KEY`.
 ### Slack test endpoint
 Requires `.env` with `SLACK_WEBHOOK_URL` (or pass `webhook_url` in body).
 - POST `/api/slack/test`
+
+### Slack Socket Mode (local)
+Requires `.env` with `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN`.
+- DM or mention the bot with `잔고`, `balance`, `status`, `help`
 
 ## Config
 Copy `.env.example` to `.env` and fill in keys.

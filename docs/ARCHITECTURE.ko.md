@@ -34,6 +34,7 @@
    - UI: `app/ui/routes.py`
 4. 로그 설정: `app/core/logging.py`
 5. 텔레그램 폴링 시작: `app/services/telegram_bot.py`
+6. Slack Socket Mode 시작(토큰 설정 시): `app/services/slack_socket.py`
 
 ### 2.2 상태/설정
 - 런타임 상태: `app/core/state.py`
@@ -67,6 +68,7 @@ app/
     telegram.py          # Telegram 클라이언트(송/수신)
     telegram_bot.py      # Telegram 폴링/명령 처리
     slack.py             # Slack Incoming Webhook 알림
+    slack_socket.py      # Slack Socket Mode 수신/응답
   ui/
     routes.py            # UI 라우터
     templates/           # HTML 템플릿
@@ -103,7 +105,11 @@ docs/                    # 문서
 - Incoming Webhook으로 메시지 전송
 - `/api/slack/test`로 연동 테스트 가능
 
-### 4.6 UI (`app/ui`)
+### 4.6 Slack Socket Mode (`app/services/slack_socket.py`)
+- Slack 메시지 수신(앱 멘션/DM) 및 응답
+- Upbit 잔고 조회 등 명령 처리
+
+### 4.7 UI (`app/ui`)
 - 대시보드: 현재는 정적 화면
 - 설정 화면: 향후 `/api/config`와 연동 예정
 
@@ -143,9 +149,10 @@ GET /api/upbit/accounts -> UpbitClient -> Upbit REST API
 - `app/services/telegram.py` 확장
 - 메시지 수신(getUpdates) + 명령 파서 추가
 
-### 7.2 Slack 알림 확장
+### 7.2 Slack 알림/명령 확장
 - Incoming Webhook 기반 알림 템플릿/포맷 추가
 - 이벤트(체결/오류/일일 요약) 자동 발송 연동
+- Socket Mode 명령 확장(잔고/상태 등)
 
 ### 7.3 전략/리스크 엔진
 - 새로운 서비스 모듈 추가 예정

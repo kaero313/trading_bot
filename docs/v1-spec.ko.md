@@ -68,6 +68,7 @@
 
 ### 9.1) Slack 알림(선택)
 - Incoming Webhook 기반 알림 전송
+- 로컬에서는 Socket Mode로 명령 수신 가능(앱 멘션/DM)
 
 ## 10) FastAPI UI & API
 - UI 화면:

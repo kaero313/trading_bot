@@ -21,6 +21,7 @@ app/models/schemas.py
 app/services/__init__.py
 app/services/bot_service.py
 app/services/slack.py
+app/services/slack_socket.py
 app/services/telegram.py
 app/services/telegram_bot.py
 app/services/upbit_client.py
