@@ -190,6 +190,15 @@ class UpbitClient:
             auth=False,
         )
 
+    async def get_ticker(self, markets: list[str]) -> list[dict[str, Any]]:
+        joined = ",".join(markets)
+        return await self._request(
+            "GET",
+            "/v1/ticker",
+            params={"markets": joined},
+            auth=False,
+        )
+
     async def get_accounts(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/v1/accounts", auth=True)
 
