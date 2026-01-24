@@ -70,6 +70,7 @@
 - `pip install -e .` 동작을 위해 패키지 디스커버리 설정 추가(`logs/` 제외)
 - Slack Socket Mode 연동을 위한 환경 변수 키 추가(xoxb/xapp)
 - Slack Socket Mode 메시지 수신(앱 멘션/DM) + 잔고/상태/도움말 응답
+  - 잔고 응답에 계좌 KRW, 보유 코인 평균단가/수량/추정금액, 총자산 포함
 - Slack Socket Mode 의존성 추가(`slack-sdk`, `aiohttp`)
 
 ### 실행 방법 (로컬)
@@ -89,6 +90,7 @@ uvicorn app.main:app --reload
 ### 테스트/운영 중 참고사항
 - Upbit Open API는 IP 화이트리스트를 사용하는 경우가 있어, 등록된 공인 IP에서만 호출 가능
 - IP 변경 시 401 `no_authorization_ip` 오류가 발생할 수 있음
+- `.env`는 프로젝트 루트(`C:\\project\\trading_bot\\.env`) 기준으로 로딩되도록 고정됨
 
 ## 7) 보안/깃 관리
 - 실제 키는 `.env`에만 저장 (깃 제외)

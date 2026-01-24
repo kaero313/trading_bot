@@ -67,11 +67,14 @@ class SlackSocketService:
         self._client.socket_mode_request_listeners.append(_process)
 
         await self._load_bot_user_id()
-        await self._client.connect()
-        logger.info("Slack Socket Mode connected")
-
-        await self._stop_event.wait()
-        await self._shutdown_client()
+        try:
+            await self._client.connect()
+            logger.info("Slack Socket Mode connected")
+            await self._stop_event.wait()
+        except Exception as exc:
+            logger.exception("Slack Socket Mode connection error: %s", exc)
+        finally:
+            await self._shutdown_client()
 
     async def _shutdown_client(self) -> None:
         if self._client is not None:
@@ -85,7 +88,15 @@ class SlackSocketService:
             self._client = None
 
         if self._web_client is not None:
-            await self._web_client.close()
+            close_method = getattr(self._web_client, "close", None)
+            if callable(close_method):
+                result = close_method()
+                if asyncio.iscoroutine(result):
+                    await result
+            else:
+                session = getattr(self._web_client, "session", None)
+                if session is not None:
+                    await session.close()
             self._web_client = None
 
     async def _load_bot_user_id(self) -> None:
@@ -99,6 +110,12 @@ class SlackSocketService:
 
     async def _handle_event(self, event: dict[str, Any]) -> None:
         event_type = event.get("type")
+        logger.debug(
+            "Slack event received: type=%s channel=%s channel_type=%s",
+            event_type,
+            event.get("channel"),
+            event.get("channel_type"),
+        )
         if event_type == "app_mention":
             text = self._strip_mention(event.get("text", ""))
             await self._handle_command(text, event)
@@ -107,8 +124,11 @@ class SlackSocketService:
         if event_type == "message":
             if event.get("bot_id") or event.get("subtype") == "bot_message":
                 return
-            if event.get("channel_type") != "im":
-                return
+            channel = event.get("channel")
+            channel_type = event.get("channel_type")
+            if channel_type not in ("im", "mpim"):
+                if not (isinstance(channel, str) and channel.startswith(("D", "G"))):
+                    return
             text = event.get("text", "")
             await self._handle_command(text, event)
             return
@@ -156,7 +176,11 @@ class SlackSocketService:
         status = state.status()
         heartbeat = status.last_heartbeat or "-"
         err = status.last_error or "-"
-        text = f"봇 상태: {'실행 중' if status.running else '중지'}\n마지막 하트비트: {heartbeat}\n최근 오류: {err}"
+        text = (
+            f"봇 상태: {'실행 중' if status.running else '중지'}\n"
+            f"마지막 하트비트: {heartbeat}\n"
+            f"최근 오류: {err}"
+        )
         await self._post_message(channel, text)
 
     async def _send_balance(self, channel: str) -> None:
@@ -183,9 +207,7 @@ class SlackSocketService:
             return
 
         price_map = await self._load_prices(balances)
-        lines, total = self._format_balances(balances, price_map)
-        if total is not None:
-            lines.append(f"총합(추정): {total:,.0f} KRW")
+        lines = self._format_balances(balances, price_map)
         await self._post_message(channel, "\n".join(lines))
 
     def _extract_balances(self, accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -203,6 +225,8 @@ class SlackSocketService:
                     "balance": balance,
                     "locked": locked,
                     "total": total,
+                    "avg_buy_price": self._to_float(item.get("avg_buy_price")),
+                    "unit_currency": item.get("unit_currency") or "KRW",
                 }
             )
         return results
@@ -216,7 +240,7 @@ class SlackSocketService:
         except UpbitAPIError as exc:
             logger.warning("Upbit ticker error: %s", exc)
             return {}
-        price_map = {}
+        price_map: dict[str, float] = {}
         for item in tickers:
             market = item.get("market")
             price = item.get("trade_price")
@@ -228,35 +252,61 @@ class SlackSocketService:
         self,
         balances: list[dict[str, Any]],
         price_map: dict[str, float],
-    ) -> tuple[list[str], float | None]:
-        lines = ["[잔고]"]
-        total_value = 0.0
-        has_pricing = False
-        non_krw_count = 0
-        priced_count = 0
+    ) -> list[str]:
+        summary_lines = ["[잔고 요약]"]
+        detail_lines = ["[보유 코인]"]
+        unknown_symbols: list[str] = []
+
+        krw_balance = 0.0
+        krw_locked = 0.0
+        coin_value = 0.0
+
         for item in balances:
             currency = item["currency"]
             total = item["total"]
             locked = item["locked"]
-            line = f"{currency}: {self._fmt_amount(total)}"
-            if locked > 0:
-                line += f" (locked {self._fmt_amount(locked)})"
+            avg_buy = item["avg_buy_price"]
+            unit_currency = item["unit_currency"]
+
             if currency == "KRW":
-                total_value += total
+                krw_balance = item["balance"]
+                krw_locked = locked
+                continue
+
+            line = f"{currency}: 수량 {self._fmt_amount(total)}"
+            if locked > 0:
+                line += f" (주문중 {self._fmt_amount(locked)})"
+            if avg_buy > 0:
+                line += f" | 평균단가 {self._fmt_krw(avg_buy)} {unit_currency}"
             else:
-                non_krw_count += 1
-                market = f"KRW-{currency}"
-                price = price_map.get(market)
-                if price:
-                    value = price * total
-                    total_value += value
-                    has_pricing = True
-                    priced_count += 1
-                    line += f" (~{value:,.0f} KRW)"
-            lines.append(line)
-        if non_krw_count == 0:
-            has_pricing = True
-        return lines, total_value if has_pricing and (non_krw_count == 0 or priced_count > 0) else None
+                line += " | 평균단가 -"
+
+            market = f"KRW-{currency}"
+            price = price_map.get(market)
+            if price:
+                value = price * total
+                coin_value += value
+                line += f" | 추정 {self._fmt_krw(value)} KRW"
+            else:
+                unknown_symbols.append(currency)
+                line += " | 추정 -"
+
+            detail_lines.append(line)
+
+        krw_total = krw_balance + krw_locked
+        summary_line = f"계좌 잔고(KRW): {self._fmt_krw(krw_total)} KRW"
+        if krw_locked > 0:
+            summary_line += f" (주문중 {self._fmt_krw(krw_locked)} KRW)"
+        summary_lines.append(summary_line)
+        summary_lines.append(f"보유 코인 평가액: {self._fmt_krw(coin_value)} KRW")
+        summary_lines.append(f"추정 총자산: {self._fmt_krw(krw_total + coin_value)} KRW")
+        if unknown_symbols:
+            summary_lines.append(f"미시세 코인: {', '.join(sorted(unknown_symbols))}")
+
+        if len(detail_lines) == 1:
+            detail_lines.append("보유 코인이 없습니다.")
+
+        return summary_lines + [""] + detail_lines
 
     async def _post_message(self, channel: str, text: str) -> None:
         if not self._web_client:
@@ -275,6 +325,10 @@ class SlackSocketService:
     def _fmt_amount(value: float, decimals: int = 8) -> str:
         formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
         return formatted or "0"
+
+    @staticmethod
+    def _fmt_krw(value: float) -> str:
+        return f"{value:,.0f}"
 
 
 slack_socket_service = SlackSocketService()
