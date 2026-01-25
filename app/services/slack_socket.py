@@ -1,5 +1,9 @@
 import asyncio
 import logging
+import re
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.core.config import settings
@@ -7,6 +11,23 @@ from app.core.state import state
 from app.services.upbit_client import UpbitAPIError, upbit_client
 
 logger = logging.getLogger(__name__)
+
+MAX_BUY_PCT = 0.20
+PENDING_TTL = timedelta(minutes=5)
+
+
+@dataclass
+class PendingOrder:
+    token: str
+    user_id: str
+    channel: str
+    channel_type: str | None
+    market: str
+    order_type: str
+    amount_krw: float
+    price: float | None
+    volume: float | None
+    created_at: datetime
 
 
 class SlackSocketService:
@@ -16,6 +37,8 @@ class SlackSocketService:
         self._client = None
         self._web_client = None
         self._bot_user_id: str | None = None
+        self._pending_orders: dict[str, PendingOrder] = {}
+        self._pending_by_user: dict[str, str] = {}
 
     @property
     def enabled(self) -> bool:
@@ -143,12 +166,26 @@ class SlackSocketService:
         channel = event.get("channel")
         if not channel:
             return
+        user_id = str(event.get("user") or "")
+        channel_type = event.get("channel_type")
+        if not self._is_authorized(user_id, channel, channel_type):
+            if channel_type == "im":
+                await self._post_message(channel, "권한이 없습니다.")
+            return
         raw = (text or "").strip()
         if not raw:
             await self._send_help(channel)
             return
 
         cmd = raw.lower()
+        if cmd.startswith("확인") or cmd.startswith("confirm"):
+            await self._confirm_order(user_id, channel, channel_type, raw)
+            return
+
+        if cmd.startswith("매수") or cmd.startswith("buy"):
+            await self._prepare_buy(user_id, channel, channel_type, raw)
+            return
+
         if cmd in ("help", "/help", "도움말", "도움"):
             await self._send_help(channel)
             return
@@ -168,6 +205,10 @@ class SlackSocketService:
             "사용 가능한 명령:\n"
             "- 잔고 / balance\n"
             "- status\n"
+            "- 매수 KRW-BTC 100000 (시장가)\n"
+            "- 매수 KRW-BTC 10% (시장가)\n"
+            "- 매수 KRW-BTC 100000 지정가 50000000\n"
+            "- 확인 <토큰>\n"
             "- help\n"
         )
         await self._post_message(channel, text)
@@ -209,6 +250,315 @@ class SlackSocketService:
         price_map, valid_markets = await self._load_prices(balances)
         lines = self._format_balances(balances, price_map, valid_markets)
         await self._post_message(channel, "\n".join(lines))
+
+    def _is_authorized(self, user_id: str, channel: str, channel_type: str | None) -> bool:
+        allowed_users = self._split_csv(settings.slack_allowed_user_ids)
+        if allowed_users and user_id not in allowed_users:
+            logger.info("Slack unauthorized user: %s", user_id)
+            return False
+
+        if channel_type == "im" or (isinstance(channel, str) and channel.startswith("D")):
+            return True
+
+        allowed_channels = self._split_csv(settings.slack_trade_channel_ids)
+        if allowed_channels and channel in allowed_channels:
+            return True
+
+        logger.info("Slack unauthorized channel: %s", channel)
+        return False
+
+    async def _prepare_buy(
+        self,
+        user_id: str,
+        channel: str,
+        channel_type: str | None,
+        raw: str,
+    ) -> None:
+        parsed = self._parse_buy_command(raw)
+        if parsed is None:
+            await self._post_message(
+                channel,
+                "매수 형식이 올바르지 않습니다. 예) 매수 KRW-BTC 100000, 매수 KRW-BTC 10%, "
+                "매수 KRW-BTC 100000 지정가 50000000",
+            )
+            return
+
+        market = parsed["market"]
+        order_type = parsed["order_type"]
+        amount_value = parsed["amount_value"]
+        amount_is_pct = parsed["amount_is_pct"]
+        limit_price = parsed.get("price")
+
+        if not settings.upbit_access_key or not settings.upbit_secret_key:
+            await self._post_message(
+                channel,
+                "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요.",
+            )
+            return
+
+        try:
+            accounts = await upbit_client.get_accounts()
+        except UpbitAPIError as exc:
+            payload = exc.to_dict()
+            await self._post_message(
+                channel,
+                f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
+            )
+            return
+
+        available_krw = self._available_krw(accounts)
+        if available_krw <= 0:
+            await self._post_message(channel, "사용 가능한 KRW 잔고가 없습니다.")
+            return
+
+        if amount_is_pct:
+            pct = amount_value / 100.0
+            if pct <= 0 or pct > 1:
+                await self._post_message(channel, "퍼센트 값이 올바르지 않습니다.")
+                return
+            if pct > MAX_BUY_PCT:
+                await self._post_message(
+                    channel,
+                    f"1회 매수 상한은 사용 가능한 KRW의 {int(MAX_BUY_PCT*100)}%입니다.",
+                )
+                return
+            amount_krw = available_krw * pct
+        else:
+            amount_krw = amount_value
+            if amount_krw <= 0:
+                await self._post_message(channel, "매수 금액이 올바르지 않습니다.")
+                return
+            if amount_krw > available_krw * MAX_BUY_PCT:
+                await self._post_message(
+                    channel,
+                    f"1회 매수 상한은 사용 가능한 KRW의 {int(MAX_BUY_PCT*100)}%입니다.",
+                )
+                return
+
+        if amount_krw > available_krw:
+            await self._post_message(channel, "KRW 잔고가 부족합니다.")
+            return
+
+        volume = None
+        if order_type == "limit":
+            if not limit_price or limit_price <= 0:
+                await self._post_message(channel, "지정가 주문은 가격이 필요합니다.")
+                return
+            volume = amount_krw / limit_price
+
+        token = uuid.uuid4().hex[:6]
+        pending = PendingOrder(
+            token=token,
+            user_id=user_id,
+            channel=channel,
+            channel_type=channel_type,
+            market=market,
+            order_type=order_type,
+            amount_krw=amount_krw,
+            price=limit_price,
+            volume=volume,
+            created_at=datetime.now(timezone.utc),
+        )
+        self._pending_orders[token] = pending
+        self._pending_by_user[user_id] = token
+        self._cleanup_pending()
+
+        summary = self._format_pending_summary(pending)
+        await self._post_message(
+            channel,
+            f"{summary}\n확인하려면 `확인 {token}` 을 입력하세요. (유효 {int(PENDING_TTL.total_seconds()/60)}분)",
+        )
+
+    async def _confirm_order(
+        self,
+        user_id: str,
+        channel: str,
+        channel_type: str | None,
+        raw: str,
+    ) -> None:
+        self._cleanup_pending()
+        parts = raw.split()
+        token = parts[1] if len(parts) > 1 else self._pending_by_user.get(user_id)
+        if not token:
+            await self._post_message(channel, "확인할 주문이 없습니다. 토큰을 입력하세요.")
+            return
+
+        pending = self._pending_orders.get(token)
+        if not pending:
+            await self._post_message(channel, "해당 토큰의 주문이 없습니다.")
+            return
+
+        if pending.user_id != user_id:
+            await self._post_message(channel, "다른 사용자 주문은 확인할 수 없습니다.")
+            return
+
+        if pending.channel != channel:
+            await self._post_message(channel, "주문을 생성한 채널에서만 확인할 수 있습니다.")
+            return
+
+        try:
+            if pending.order_type == "market":
+                result = await upbit_client.create_order(
+                    market=pending.market,
+                    side="bid",
+                    ord_type="price",
+                    price=self._fmt_number(pending.amount_krw),
+                )
+            else:
+                result = await upbit_client.create_order(
+                    market=pending.market,
+                    side="bid",
+                    ord_type="limit",
+                    price=self._fmt_number(pending.price or 0),
+                    volume=self._fmt_number(pending.volume or 0),
+                )
+        except UpbitAPIError as exc:
+            payload = exc.to_dict()
+            await self._post_message(
+                channel,
+                f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
+            )
+            return
+
+        order_uuid = result.get("uuid") if isinstance(result, dict) else None
+        message = "매수 주문이 접수되었습니다."
+        if order_uuid:
+            message += f" (uuid: {order_uuid})"
+        await self._post_message(channel, message)
+        self._pending_orders.pop(token, None)
+        if self._pending_by_user.get(user_id) == token:
+            self._pending_by_user.pop(user_id, None)
+
+    def _format_pending_summary(self, pending: PendingOrder) -> str:
+        if pending.order_type == "market":
+            return (
+                "[매수 확인]\n"
+                f"- 마켓: {pending.market}\n"
+                f"- 타입: 시장가\n"
+                f"- 금액: {self._fmt_krw(pending.amount_krw)} KRW"
+            )
+        return (
+            "[매수 확인]\n"
+            f"- 마켓: {pending.market}\n"
+            f"- 타입: 지정가\n"
+            f"- 금액: {self._fmt_krw(pending.amount_krw)} KRW\n"
+            f"- 가격: {self._fmt_krw(pending.price or 0)} KRW\n"
+            f"- 수량: {self._fmt_amount(pending.volume or 0)}"
+        )
+
+    def _cleanup_pending(self) -> None:
+        now = datetime.now(timezone.utc)
+        expired = [key for key, item in self._pending_orders.items() if now - item.created_at > PENDING_TTL]
+        for key in expired:
+            pending = self._pending_orders.pop(key, None)
+            if pending and self._pending_by_user.get(pending.user_id) == key:
+                self._pending_by_user.pop(pending.user_id, None)
+
+    def _parse_buy_command(self, raw: str) -> dict[str, Any] | None:
+        tokens = raw.split()
+        if len(tokens) < 3:
+            return None
+        market = tokens[1].upper()
+        if not market.startswith("KRW-"):
+            return None
+        rest_tokens = tokens[2:]
+        rest_text = " ".join(rest_tokens)
+
+        order_type = "market"
+        if any(tok in ("지정가", "limit") for tok in rest_tokens) or "@" in rest_text:
+            order_type = "limit"
+        if any(tok in ("시장가", "market") for tok in rest_tokens):
+            order_type = "market"
+
+        amount_str = None
+        price_str = None
+
+        if "@" in rest_text:
+            left, right = rest_text.split("@", 1)
+            amount_str = self._first_number_in_text(left)
+            price_str = self._first_number_in_text(right)
+            order_type = "limit"
+        else:
+            numbers = self._extract_numbers(rest_tokens)
+            if not numbers:
+                return None
+            amount_str = numbers[0]
+            if order_type == "limit":
+                price_str = self._find_price_after_keyword(rest_tokens, ("지정가", "limit"))
+                if not price_str and len(numbers) >= 2:
+                    price_str = numbers[1]
+
+        if not amount_str:
+            return None
+
+        amount_is_pct = amount_str.endswith("%")
+        amount_value = self._to_number(amount_str.rstrip("%"))
+        if amount_value is None:
+            return None
+
+        price = None
+        if order_type == "limit":
+            if not price_str:
+                return None
+            price = self._to_number(price_str)
+            if price is None:
+                return None
+
+        return {
+            "market": market,
+            "order_type": order_type,
+            "amount_value": amount_value,
+            "amount_is_pct": amount_is_pct,
+            "price": price,
+        }
+
+    def _find_price_after_keyword(self, tokens: list[str], keywords: tuple[str, ...]) -> str | None:
+        for idx, tok in enumerate(tokens):
+            if tok in keywords:
+                for candidate in tokens[idx + 1 :]:
+                    if self._is_number_like(candidate):
+                        return candidate
+        return None
+
+    def _first_number_in_text(self, text: str) -> str | None:
+        matches = re.findall(r"[0-9][0-9,]*\.?[0-9]*%?", text)
+        return matches[0] if matches else None
+
+    def _extract_numbers(self, tokens: list[str]) -> list[str]:
+        results = []
+        for tok in tokens:
+            if self._is_number_like(tok):
+                results.append(tok)
+        return results
+
+    def _is_number_like(self, value: str) -> bool:
+        candidate = value.replace(",", "")
+        if candidate.endswith("%"):
+            candidate = candidate[:-1]
+        return bool(re.fullmatch(r"[0-9]+(\.[0-9]+)?", candidate))
+
+    def _to_number(self, value: str) -> float | None:
+        candidate = value.replace(",", "")
+        try:
+            return float(candidate)
+        except ValueError:
+            return None
+
+    def _available_krw(self, accounts: list[dict[str, Any]]) -> float:
+        for item in accounts:
+            if item.get("currency") == "KRW":
+                balance = self._to_float(item.get("balance"))
+                locked = self._to_float(item.get("locked"))
+                return max(balance - locked, 0.0)
+        return 0.0
+
+    def _split_csv(self, value: str | None) -> set[str]:
+        if not value:
+            return set()
+        return {item.strip() for item in value.split(",") if item.strip()}
+
+    def _fmt_number(self, value: float) -> str:
+        return f"{value:.8f}".rstrip("0").rstrip(".") or "0"
 
     def _extract_balances(self, accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         results = []
