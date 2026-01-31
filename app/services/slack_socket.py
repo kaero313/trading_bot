@@ -786,8 +786,7 @@ class SlackSocketService:
                 market = f"KRW-{currency}"
                 if valid_markets is not None and market not in valid_markets:
                     unknown_symbols.append(currency)
-                    line += " | 추정 - (KRW 마켓 없음)"
-                    detail_lines.append(line)
+                    # 미시세 코인은 보유 코인 목록에서 제외
                     continue
 
                 price = price_map.get(market)
@@ -801,10 +800,12 @@ class SlackSocketService:
                         line += f" | 손익 {self._fmt_signed_krw(pnl)} KRW ({self._fmt_pct(price, avg_buy)})"
                 else:
                     unknown_symbols.append(currency)
-                    line += " | 추정 -"
+                    # 미시세 코인은 보유 코인 목록에서 제외
+                    continue
             else:
                 unknown_symbols.append(f"{currency}({unit_currency})")
-                line += f" | 추정 - (단위 {unit_currency})"
+                # 미시세 코인은 보유 코인 목록에서 제외
+                continue
 
             detail_lines.append(line)
 
