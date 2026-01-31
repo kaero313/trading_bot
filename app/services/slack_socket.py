@@ -760,6 +760,7 @@ class SlackSocketService:
         krw_balance = 0.0
         krw_locked = 0.0
         coin_value = 0.0
+        total_pnl = 0.0
 
         for item in balances:
             currency = item["currency"]
@@ -794,6 +795,10 @@ class SlackSocketService:
                     value = price * total
                     coin_value += value
                     line += f" | 추정 {self._fmt_krw(value)} KRW"
+                    if avg_buy > 0:
+                        pnl = (price - avg_buy) * total
+                        total_pnl += pnl
+                        line += f" | 손익 {self._fmt_signed_krw(pnl)} KRW ({self._fmt_pct(price, avg_buy)})"
                 else:
                     unknown_symbols.append(currency)
                     line += " | 추정 -"
@@ -810,6 +815,8 @@ class SlackSocketService:
         summary_lines.append(summary_line)
         summary_lines.append(f"보유 코인 평가액: {self._fmt_krw(coin_value)} KRW")
         summary_lines.append(f"추정 총자산: {self._fmt_krw(krw_total + coin_value)} KRW")
+        if coin_value > 0:
+            summary_lines.append(f"보유 코인 손익 합계: {self._fmt_signed_krw(total_pnl)} KRW")
         if unknown_symbols:
             summary_lines.append(f"미시세 코인: {', '.join(sorted(unknown_symbols))}")
 
@@ -839,6 +846,19 @@ class SlackSocketService:
     @staticmethod
     def _fmt_krw(value: float) -> str:
         return f"{value:,.0f}"
+
+    @staticmethod
+    def _fmt_signed_krw(value: float) -> str:
+        sign = "+" if value > 0 else ""
+        return f"{sign}{value:,.0f}"
+
+    @staticmethod
+    def _fmt_pct(current: float, avg: float) -> str:
+        if avg <= 0:
+            return "-"
+        pct = (current / avg - 1.0) * 100.0
+        sign = "+" if pct > 0 else ""
+        return f"{sign}{pct:.2f}%"
 
 
 slack_socket_service = SlackSocketService()
