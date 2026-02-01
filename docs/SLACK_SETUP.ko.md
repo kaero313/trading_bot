@@ -37,8 +37,11 @@ uvicorn app.main:app --reload
   - `매도 KRW-BTC 0.01`
   - `매도 KRW-BTC 10%`
   - `매도 KRW-BTC 0.01 지정가 50000000`
-  - `주문`
-  - `주문 KRW-BTC`
-  - `주문 완료`
+  - `미체결 내역`
+  - `미체결 내역 KRW-BTC`
+  - `체결 내역`
+  - `체결 내역 KRW-BTC`
+  - `취소 내역`
+  - `취소 내역 KRW-BTC`
   - `취소 <UUID>`
   - `확인 <토큰>`

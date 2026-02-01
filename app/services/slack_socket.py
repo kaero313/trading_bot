@@ -184,34 +184,45 @@ class SlackSocketService:
             if channel_type == "im":
                 await self._post_message(channel, "권한이 없습니다.")
             return
+
         raw = (text or "").strip()
         if not raw:
             await self._send_help(channel)
             return
 
         cmd = raw.lower()
-        if cmd.startswith("확인") or cmd.startswith("confirm"):
+        normalized = re.sub(r"\s+", " ", cmd).strip()
+        compact = normalized.replace(" ", "")
+        if normalized.startswith("확인") or normalized.startswith("confirm"):
             await self._confirm_order(user_id, channel, raw)
             return
 
-        if cmd.startswith("매수") or cmd.startswith("buy"):
+        if normalized.startswith("매수") or normalized.startswith("buy"):
             await self._prepare_buy(user_id, channel, channel_type, raw)
             return
 
-        if cmd.startswith("매도") or cmd.startswith("sell"):
+        if normalized.startswith("매도") or normalized.startswith("sell"):
             await self._prepare_sell(user_id, channel, channel_type, raw)
             return
 
-        if cmd.startswith("취소") or cmd.startswith("주문취소") or cmd.startswith("cancel"):
-            await self._prepare_cancel(user_id, channel, channel_type, raw)
-            return
-
-        if cmd.startswith("주문") or cmd.startswith("orders"):
-            await self._send_orders(channel, raw)
-            return
-
-        if cmd in ("help", "/help", "도움말", "도움"):
+        if normalized in ("help", "/help", "도움말", "도움"):
             await self._send_help(channel)
+            return
+
+        if compact.startswith("미체결"):
+            await self._send_orders(channel, raw, order_mode="open")
+            return
+
+        if compact.startswith("취소내역"):
+            await self._send_orders(channel, raw, order_mode="cancel")
+            return
+
+        if compact.startswith("체결"):
+            await self._send_orders(channel, raw, order_mode="done")
+            return
+
+        if normalized.startswith("취소") or normalized.startswith("주문취소") or normalized.startswith("cancel"):
+            await self._prepare_cancel(user_id, channel, channel_type, raw)
             return
 
         if cmd in ("status", "/status", "상태"):
@@ -235,9 +246,9 @@ class SlackSocketService:
             "- 매도 KRW-BTC 0.01 (시장가, 수량)\n"
             "- 매도 KRW-BTC 10% (시장가, 보유비율)\n"
             "- 매도 KRW-BTC 0.01 지정가 50000000\n"
-            "- 주문 (미체결)\n"
-            "- 주문 KRW-BTC (미체결)\n"
-            "- 주문 완료 (체결/취소)\n"
+            "- 미체결 내역 (또는 미체결 내역 KRW-BTC)\n"
+            "- 체결 내역 (또는 체결 내역 KRW-BTC)\n"
+            "- 취소 내역 (또는 취소 내역 KRW-BTC)\n"
             "- 취소 <주문 UUID>\n"
             "- 확인 <토큰>\n"
             "- help\n"
@@ -282,7 +293,7 @@ class SlackSocketService:
         lines = self._format_balances(balances, price_map, valid_markets)
         await self._post_message(channel, "\n".join(lines))
 
-    async def _send_orders(self, channel: str, raw: str) -> None:
+    async def _send_orders(self, channel: str, raw: str, order_mode: str) -> None:
         if not settings.upbit_access_key or not settings.upbit_secret_key:
             await self._post_message(
                 channel,
@@ -291,16 +302,21 @@ class SlackSocketService:
             return
 
         market = self._extract_market(raw)
-        show_closed = "완료" in raw or "closed" in raw or "체결" in raw
+        show_closed = order_mode in ("done", "cancel")
         try:
             if show_closed:
+                if order_mode == "done":
+                    states = ["done"]
+                    title = "[체결 내역]"
+                else:
+                    states = ["cancel"]
+                    title = "[취소 내역]"
                 orders = await upbit_client.get_orders_closed(
                     market=market,
-                    states=["done", "cancel"],
+                    states=states,
                     limit=10,
                     order_by="desc",
                 )
-                title = "[완료 주문]"
             else:
                 orders = await upbit_client.get_orders_open(
                     market=market,
@@ -308,7 +324,7 @@ class SlackSocketService:
                     limit=10,
                     order_by="desc",
                 )
-                title = "[미체결 주문]"
+                title = "[미체결 내역]"
         except UpbitAPIError as exc:
             payload = exc.to_dict()
             await self._post_message(
@@ -546,8 +562,8 @@ class SlackSocketService:
     ) -> None:
         parts = raw.split()
         order_uuid = parts[1] if len(parts) > 1 else ""
-        if not order_uuid:
-            await self._post_message(channel, "취소할 주문 UUID를 입력하세요.")
+        if not order_uuid or not self._looks_like_uuid(order_uuid):
+            await self._post_message(channel, "취소는 `취소 <주문 UUID>` 형식입니다.")
             return
 
         token = uuid.uuid4().hex[:6]
@@ -684,13 +700,6 @@ class SlackSocketService:
         if pending.order_type == "limit":
             lines.append(f"- 가격: {self._fmt_krw(pending.price or 0)} KRW")
         return "\n".join(lines)
-
-    def _extract_market(self, raw: str) -> str | None:
-        tokens = raw.split()
-        for token in tokens[1:]:
-            if token.upper().startswith("KRW-"):
-                return token.upper()
-        return None
 
     def _register_pending(self, user_id: str, pending: PendingOrder) -> None:
         previous_token = self._pending_by_user.get(user_id)
@@ -837,6 +846,13 @@ class SlackSocketService:
     def _fmt_number(self, value: float) -> str:
         return f"{value:.8f}".rstrip("0").rstrip(".") or "0"
 
+    def _extract_market(self, raw: str) -> str | None:
+        tokens = raw.split()
+        for token in tokens[1:]:
+            if token.upper().startswith("KRW-"):
+                return token.upper()
+        return None
+
     def _extract_balances(self, accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         results = []
         for item in accounts:
@@ -940,7 +956,6 @@ class SlackSocketService:
                 market = f"KRW-{currency}"
                 if valid_markets is not None and market not in valid_markets:
                     unknown_symbols.append(currency)
-                    # 미시세 코인은 보유 코인 목록에서 제외
                     continue
 
                 price = price_map.get(market)
@@ -954,11 +969,9 @@ class SlackSocketService:
                         line += f" | 손익 {self._fmt_signed_krw(pnl)} KRW ({self._fmt_pct(price, avg_buy)})"
                 else:
                     unknown_symbols.append(currency)
-                    # 미시세 코인은 보유 코인 목록에서 제외
                     continue
             else:
                 unknown_symbols.append(f"{currency}({unit_currency})")
-                # 미시세 코인은 보유 코인 목록에서 제외
                 continue
 
             detail_lines.append(line)
@@ -1014,6 +1027,17 @@ class SlackSocketService:
         pct = (current / avg - 1.0) * 100.0
         sign = "+" if pct > 0 else ""
         return f"{sign}{pct:.2f}%"
+
+    @staticmethod
+    def _looks_like_uuid(value: str) -> bool:
+        if re.fullmatch(r"[0-9a-fA-F]{32}", value):
+            return True
+        return bool(
+            re.fullmatch(
+                r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                value,
+            )
+        )
 
 
 slack_socket_service = SlackSocketService()
