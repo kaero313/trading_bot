@@ -47,7 +47,7 @@ def _normalize_params(params: dict[str, Any] | list[tuple[str, Any]] | None) -> 
         if value is None:
             continue
         if isinstance(value, (list, tuple)):
-            list_key = key if key.endswith("[]") else f"{key}[]"
+            list_key = key
             for item in value:
                 items.append((list_key, item))
         else:
@@ -59,7 +59,7 @@ def _build_query_string(params: dict[str, Any] | list[tuple[str, Any]] | None) -
     items = _normalize_params(params)
     if not items:
         return ""
-    return urlencode(items, doseq=True)
+    return str(httpx.QueryParams(items))
 
 
 def _parse_remaining_req(value: str | None) -> dict[str, str] | None:
