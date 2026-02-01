@@ -318,9 +318,10 @@ class SlackSocketService:
                     order_by="desc",
                 )
             else:
+                states = ["wait", "watch"]
                 orders = await upbit_client.get_orders_open(
                     market=market,
-                    states=["wait", "watch"],
+                    states=states,
                     limit=10,
                     order_by="desc",
                 )
@@ -332,6 +333,9 @@ class SlackSocketService:
                 f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
             )
             return
+
+        if states:
+            orders = [item for item in orders if item.get("state") in states]
 
         if not orders:
             await self._post_message(channel, "표시할 주문이 없습니다.")
