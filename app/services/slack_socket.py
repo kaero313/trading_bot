@@ -182,7 +182,7 @@ class SlackSocketService:
         channel_type = event.get("channel_type")
         if not self._is_authorized(user_id, channel, channel_type):
             if channel_type == "im":
-                await self._post_message(channel, "권한이 없습니다.")
+                await self._post_message(channel, self._err("권한", "허용되지 않은 사용자/채널입니다."))
             return
 
         raw = (text or "").strip()
@@ -233,7 +233,7 @@ class SlackSocketService:
             await self._send_balance(channel)
             return
 
-        await self._post_message(channel, "지원하지 않는 명령입니다. 'help'를 입력하세요.")
+        await self._post_message(channel, self._err("형식", "지원하지 않는 명령입니다. 'help'를 입력하세요."))
 
     async def _send_help(self, channel: str) -> None:
         text = (
@@ -271,18 +271,14 @@ class SlackSocketService:
         if not settings.upbit_access_key or not settings.upbit_secret_key:
             await self._post_message(
                 channel,
-                "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요.",
+                self._err("설정", "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요."),
             )
             return
 
         try:
             accounts = await upbit_client.get_accounts()
         except UpbitAPIError as exc:
-            payload = exc.to_dict()
-            await self._post_message(
-                channel,
-                f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
-            )
+            await self._post_message(channel, self._format_upbit_error(exc))
             return
 
         balances = self._extract_balances(accounts)
@@ -298,7 +294,7 @@ class SlackSocketService:
         if not settings.upbit_access_key or not settings.upbit_secret_key:
             await self._post_message(
                 channel,
-                "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요.",
+                self._err("설정", "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요."),
             )
             return
 
@@ -328,11 +324,7 @@ class SlackSocketService:
                 )
                 title = "[미체결 내역]"
         except UpbitAPIError as exc:
-            payload = exc.to_dict()
-            await self._post_message(
-                channel,
-                f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
-            )
+            await self._post_message(channel, self._format_upbit_error(exc))
             return
 
         if states:
@@ -380,8 +372,11 @@ class SlackSocketService:
         if parsed is None:
             await self._post_message(
                 channel,
-                "매수 형식이 올바르지 않습니다. 예) 매수 KRW-BTC 100000, 매수 KRW-BTC 10%, "
-                "매수 KRW-BTC 100000 지정가 50000000",
+                self._err(
+                    "형식",
+                    "매수 형식이 올바르지 않습니다. 예) 매수 KRW-BTC 100000, 매수 KRW-BTC 10%, "
+                    "매수 KRW-BTC 100000 지정가 50000000",
+                ),
             )
             return
 
@@ -395,57 +390,59 @@ class SlackSocketService:
         if not settings.upbit_access_key or not settings.upbit_secret_key:
             await self._post_message(
                 channel,
-                "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요.",
+                self._err("설정", "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요."),
             )
             return
 
         try:
             accounts = await upbit_client.get_accounts()
         except UpbitAPIError as exc:
-            payload = exc.to_dict()
-            await self._post_message(
-                channel,
-                f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
-            )
+            await self._post_message(channel, self._format_upbit_error(exc))
             return
 
         available_base = self._available_currency(accounts, base_currency)
         if available_base <= 0:
-            await self._post_message(channel, f"사용 가능한 {base_currency} 잔고가 없습니다.")
+            await self._post_message(channel, self._err("잔고", f"사용 가능한 {base_currency} 잔고가 없습니다."))
             return
 
         if amount_is_pct:
             pct = amount_value / 100.0
             if pct <= 0 or pct > 1:
-                await self._post_message(channel, "퍼센트 값이 올바르지 않습니다.")
+                await self._post_message(channel, self._err("값", "퍼센트 값이 올바르지 않습니다."))
                 return
             if pct > MAX_BUY_PCT:
                 await self._post_message(
                     channel,
-                    f"1회 매수 상한은 사용 가능한 {base_currency}의 {int(MAX_BUY_PCT*100)}%입니다.",
+                    self._err(
+                        "제한",
+                        f"1회 매수 상한은 사용 가능한 {base_currency}의 {int(MAX_BUY_PCT*100)}%입니다.",
+                    ),
                 )
                 return
             amount_krw = available_base * pct
         else:
             amount_krw = amount_value
             if amount_krw <= 0:
-                await self._post_message(channel, "매수 금액이 올바르지 않습니다.")
+                await self._post_message(channel, self._err("값", "매수 금액이 올바르지 않습니다."))
                 return
             if amount_krw > available_base * MAX_BUY_PCT:
                 await self._post_message(
                     channel,
-                    f"1회 매수 상한은 사용 가능한 {base_currency}의 {int(MAX_BUY_PCT*100)}%입니다.",
+                    self._err(
+                        "제한",
+                        f"1회 매수 상한은 사용 가능한 {base_currency}의 {int(MAX_BUY_PCT*100)}%입니다.",
+                    ),
                 )
                 return
 
         if amount_krw > available_base:
-            await self._post_message(channel, f"{base_currency} 잔고가 부족합니다.")
+            await self._post_message(channel, self._err("잔고", f"{base_currency} 잔고가 부족합니다."))
             return
 
         volume = None
         if order_type == "limit":
             if not limit_price or limit_price <= 0:
-                await self._post_message(channel, "지정가 주문은 가격이 필요합니다.")
+                await self._post_message(channel, self._err("형식", "지정가 주문은 가격이 필요합니다."))
                 return
             volume = amount_krw / limit_price
 
@@ -482,8 +479,11 @@ class SlackSocketService:
         if parsed is None:
             await self._post_message(
                 channel,
-                "매도 형식이 올바르지 않습니다. 예) 매도 KRW-BTC 0.01, 매도 KRW-BTC 10%, "
-                "매도 KRW-BTC 0.01 지정가 50000000",
+                self._err(
+                    "형식",
+                    "매도 형식이 올바르지 않습니다. 예) 매도 KRW-BTC 0.01, 매도 KRW-BTC 10%, "
+                    "매도 KRW-BTC 0.01 지정가 50000000",
+                ),
             )
             return
 
@@ -496,45 +496,41 @@ class SlackSocketService:
         if not settings.upbit_access_key or not settings.upbit_secret_key:
             await self._post_message(
                 channel,
-                "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요.",
+                self._err("설정", "Upbit 키가 설정되지 않았습니다. .env의 UPBIT_ACCESS_KEY/SECRET_KEY를 확인하세요."),
             )
             return
 
         try:
             accounts = await upbit_client.get_accounts()
         except UpbitAPIError as exc:
-            payload = exc.to_dict()
-            await self._post_message(
-                channel,
-                f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
-            )
+            await self._post_message(channel, self._format_upbit_error(exc))
             return
 
         _, currency = self._split_market(market)
         available_volume = self._available_coin(accounts, currency)
         if available_volume <= 0:
-            await self._post_message(channel, "매도 가능한 코인 잔고가 없습니다.")
+            await self._post_message(channel, self._err("잔고", "매도 가능한 코인 잔고가 없습니다."))
             return
 
         if amount_is_pct:
             pct = amount_value / 100.0
             if pct <= 0 or pct > 1:
-                await self._post_message(channel, "퍼센트 값이 올바르지 않습니다.")
+                await self._post_message(channel, self._err("값", "퍼센트 값이 올바르지 않습니다."))
                 return
             volume = available_volume * pct
         else:
             volume = amount_value
             if volume <= 0:
-                await self._post_message(channel, "매도 수량이 올바르지 않습니다.")
+                await self._post_message(channel, self._err("값", "매도 수량이 올바르지 않습니다."))
                 return
 
         if volume > available_volume:
-            await self._post_message(channel, "보유 수량이 부족합니다.")
+            await self._post_message(channel, self._err("잔고", "보유 수량이 부족합니다."))
             return
 
         if order_type == "limit":
             if not limit_price or limit_price <= 0:
-                await self._post_message(channel, "지정가 주문은 가격이 필요합니다.")
+                await self._post_message(channel, self._err("형식", "지정가 주문은 가격이 필요합니다."))
                 return
 
         token = uuid.uuid4().hex[:6]
@@ -569,7 +565,7 @@ class SlackSocketService:
         parts = raw.split()
         order_uuid = parts[1] if len(parts) > 1 else ""
         if not order_uuid or not self._looks_like_uuid(order_uuid):
-            await self._post_message(channel, "취소는 `취소 <주문 UUID>` 형식입니다.")
+            await self._post_message(channel, self._err("형식", "취소는 `취소 <주문 UUID>` 형식입니다."))
             return
 
         token = uuid.uuid4().hex[:6]
@@ -593,27 +589,23 @@ class SlackSocketService:
         parts = raw.split()
         token = parts[1] if len(parts) > 1 else self._pending_by_user.get(user_id)
         if not token:
-            await self._post_message(channel, "확인할 주문이 없습니다. 토큰을 입력하세요.")
+            await self._post_message(channel, self._err("토큰", "확인할 주문이 없습니다. 토큰을 입력하세요."))
             return
 
         pending = self._pending_orders.get(token)
         if pending:
             if pending.user_id != user_id:
-                await self._post_message(channel, "다른 사용자 주문은 확인할 수 없습니다.")
+                await self._post_message(channel, self._err("권한", "다른 사용자 주문은 확인할 수 없습니다."))
                 return
 
             if pending.channel != channel:
-                await self._post_message(channel, "주문을 생성한 채널에서만 확인할 수 있습니다.")
+                await self._post_message(channel, self._err("권한", "주문을 생성한 채널에서만 확인할 수 있습니다."))
                 return
 
             try:
                 result = await self._submit_order(pending)
             except UpbitAPIError as exc:
-                payload = exc.to_dict()
-                await self._post_message(
-                    channel,
-                    f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
-                )
+                await self._post_message(channel, self._format_upbit_error(exc))
                 return
 
             order_uuid = result.get("uuid") if isinstance(result, dict) else None
@@ -629,25 +621,21 @@ class SlackSocketService:
 
         pending_cancel = self._pending_cancels.get(token)
         if not pending_cancel:
-            await self._post_message(channel, "해당 토큰의 주문이 없습니다.")
+            await self._post_message(channel, self._err("토큰", "해당 토큰의 주문이 없습니다."))
             return
 
         if pending_cancel.user_id != user_id:
-            await self._post_message(channel, "다른 사용자 주문은 확인할 수 없습니다.")
+            await self._post_message(channel, self._err("권한", "다른 사용자 주문은 확인할 수 없습니다."))
             return
 
         if pending_cancel.channel != channel:
-            await self._post_message(channel, "주문을 생성한 채널에서만 확인할 수 있습니다.")
+            await self._post_message(channel, self._err("권한", "주문을 생성한 채널에서만 확인할 수 있습니다."))
             return
 
         try:
             result = await upbit_client.cancel_order(uuid_=pending_cancel.order_uuid)
         except UpbitAPIError as exc:
-            payload = exc.to_dict()
-            await self._post_message(
-                channel,
-                f"Upbit 오류: {payload.get('error_name')} {payload.get('message')}",
-            )
+            await self._post_message(channel, self._format_upbit_error(exc))
             return
 
         order_uuid = result.get("uuid") if isinstance(result, dict) else None
@@ -1022,6 +1010,16 @@ class SlackSocketService:
             logger.warning("Slack web client not ready")
             return
         await self._web_client.chat_postMessage(channel=channel, text=text)
+
+    @staticmethod
+    def _err(category: str, message: str) -> str:
+        return f"오류[{category}] {message}"
+
+    def _format_upbit_error(self, exc: UpbitAPIError) -> str:
+        payload = exc.to_dict()
+        name = payload.get("error_name") or "unknown"
+        message = payload.get("message") or "-"
+        return self._err("업비트", f"{name} {message}")
 
     @staticmethod
     def _to_float(value: Any) -> float:
