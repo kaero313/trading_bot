@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 MAX_BUY_PCT = 0.20
 PENDING_TTL = timedelta(minutes=5)
+MIN_ORDER_BY_BASE = {
+    "KRW": 5000.0,
+    "BTC": 0.00005,
+    "USDT": 0.5,
+}
 
 
 @dataclass
@@ -439,6 +444,15 @@ class SlackSocketService:
             await self._post_message(channel, self._err("잔고", f"{base_currency} 잔고가 부족합니다."))
             return
 
+        min_amount = self._min_order_amount(base_currency)
+        if min_amount and amount_krw < min_amount:
+            min_text = self._format_currency_amount(min_amount, base_currency)
+            await self._post_message(
+                channel,
+                self._err("제한", f"최소 주문 금액은 {min_text} {base_currency}입니다."),
+            )
+            return
+
         volume = None
         if order_type == "limit":
             if not limit_price or limit_price <= 0:
@@ -527,6 +541,30 @@ class SlackSocketService:
         if volume > available_volume:
             await self._post_message(channel, self._err("잔고", "보유 수량이 부족합니다."))
             return
+
+        base_currency, _ = self._split_market(market)
+        min_amount = self._min_order_amount(base_currency)
+        if min_amount:
+            order_value = None
+            if order_type == "limit" and limit_price:
+                order_value = limit_price * volume
+            elif order_type == "market":
+                try:
+                    tickers = await upbit_client.get_ticker([market])
+                except UpbitAPIError as exc:
+                    await self._post_message(channel, self._format_upbit_error(exc))
+                    return
+                if tickers:
+                    price = tickers[0].get("trade_price")
+                    if price:
+                        order_value = float(price) * volume
+            if order_value is not None and order_value < min_amount:
+                min_text = self._format_currency_amount(min_amount, base_currency)
+                await self._post_message(
+                    channel,
+                    self._err("제한", f"최소 주문 금액은 {min_text} {base_currency}입니다."),
+                )
+                return
 
         if order_type == "limit":
             if not limit_price or limit_price <= 0:
@@ -1054,6 +1092,9 @@ class SlackSocketService:
         if currency == "KRW":
             return self._fmt_krw(value)
         return self._fmt_amount(value)
+
+    def _min_order_amount(self, base_currency: str) -> float | None:
+        return MIN_ORDER_BY_BASE.get(base_currency)
 
     @staticmethod
     def _looks_like_uuid(value: str) -> bool:
