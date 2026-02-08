@@ -76,6 +76,7 @@
   - 마켓은 `BTC`처럼 입력하면 기본 `KRW-BTC`로 인식
 - Slack 오류 메시지 표준화(권한/형식/설정/잔고/업비트/토큰)
 - Slack 최소 주문 금액 검증(베이스 통화 기준, Upbit 정책)
+- Slack 호가 단위(틱 사이즈) 검증(지정가 기준, Upbit 정책)
 - Slack 주문 조회/취소 명령 추가(2단계 확인)
 - Slack Socket Mode 의존성 추가(`slack-sdk`, `aiohttp`)
 
@@ -150,4 +151,4 @@ SLACK_TRADE_CHANNEL_IDS=
 ```
 
 ---
-마지막 업데이트: 2026-02-05
+마지막 업데이트: 2026-02-08

@@ -458,6 +458,14 @@ class SlackSocketService:
             if not limit_price or limit_price <= 0:
                 await self._post_message(channel, self._err("형식", "지정가 주문은 가격이 필요합니다."))
                 return
+            tick = self._tick_size(base_currency, limit_price)
+            if tick and not self._is_tick_aligned(limit_price, tick):
+                tick_text = self._format_currency_amount(tick, base_currency)
+                await self._post_message(
+                    channel,
+                    self._err("제한", f"호가 단위는 {tick_text} {base_currency}입니다."),
+                )
+                return
             volume = amount_krw / limit_price
 
         token = uuid.uuid4().hex[:6]
@@ -569,6 +577,14 @@ class SlackSocketService:
         if order_type == "limit":
             if not limit_price or limit_price <= 0:
                 await self._post_message(channel, self._err("형식", "지정가 주문은 가격이 필요합니다."))
+                return
+            tick = self._tick_size(base_currency, limit_price)
+            if tick and not self._is_tick_aligned(limit_price, tick):
+                tick_text = self._format_currency_amount(tick, base_currency)
+                await self._post_message(
+                    channel,
+                    self._err("제한", f"호가 단위는 {tick_text} {base_currency}입니다."),
+                )
                 return
 
         token = uuid.uuid4().hex[:6]
@@ -1090,11 +1106,48 @@ class SlackSocketService:
 
     def _format_currency_amount(self, value: float, currency: str) -> str:
         if currency == "KRW":
+            if value < 1:
+                return f"{value:.2f}".rstrip("0").rstrip(".")
             return self._fmt_krw(value)
         return self._fmt_amount(value)
 
     def _min_order_amount(self, base_currency: str) -> float | None:
         return MIN_ORDER_BY_BASE.get(base_currency)
+
+    def _tick_size(self, base_currency: str, price: float) -> float | None:
+        if base_currency != "KRW":
+            return None
+        return self._tick_size_krw(price)
+
+    @staticmethod
+    def _tick_size_krw(price: float) -> float:
+        if price < 10:
+            return 0.01
+        if price < 100:
+            return 0.1
+        if price < 1000:
+            return 1
+        if price < 10000:
+            return 5
+        if price < 100000:
+            return 10
+        if price < 1000000:
+            return 50
+        if price < 2000000:
+            return 100
+        if price < 10000000:
+            return 500
+        if price < 100000000:
+            return 1000
+        return 10000
+
+    @staticmethod
+    def _is_tick_aligned(price: float, tick: float) -> bool:
+        if tick <= 0:
+            return True
+        quotient = round(price / tick)
+        aligned = quotient * tick
+        return abs(aligned - price) < max(tick * 1e-6, 1e-9)
 
     @staticmethod
     def _looks_like_uuid(value: str) -> bool:

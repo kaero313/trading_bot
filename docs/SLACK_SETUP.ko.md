@@ -47,3 +47,4 @@ uvicorn app.main:app --reload
   - `확인 <토큰>`
   - 마켓 입력은 `BTC`처럼 입력하면 기본 `KRW-BTC`로 인식
   - 최소 주문 금액(Upbit 정책) 미만이면 오류 반환
+  - 지정가 주문 가격이 호가 단위(Upbit 정책)에 맞지 않으면 오류 반환
