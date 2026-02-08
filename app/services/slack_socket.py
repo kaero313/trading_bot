@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 MAX_BUY_PCT = 0.20
 PENDING_TTL = timedelta(minutes=5)
+MAX_VOLUME_DECIMALS = 8
 MIN_ORDER_BY_BASE = {
     "KRW": 5000.0,
     "BTC": 0.00005,
@@ -390,6 +391,7 @@ class SlackSocketService:
         order_type = parsed["order_type"]
         amount_value = parsed["amount_value"]
         amount_is_pct = parsed["amount_is_pct"]
+        amount_raw = parsed.get("amount_raw")
         limit_price = parsed.get("price")
 
         if not settings.upbit_access_key or not settings.upbit_secret_key:
@@ -541,6 +543,12 @@ class SlackSocketService:
                 return
             volume = available_volume * pct
         else:
+            if amount_raw and self._decimal_places(amount_raw) > MAX_VOLUME_DECIMALS:
+                await self._post_message(
+                    channel,
+                    self._err("제한", f"수량 소수 자릿수는 최대 {MAX_VOLUME_DECIMALS}자리입니다."),
+                )
+                return
             volume = amount_value
             if volume <= 0:
                 await self._post_message(channel, self._err("값", "매도 수량이 올바르지 않습니다."))
@@ -821,7 +829,8 @@ class SlackSocketService:
             return None
 
         amount_is_pct = amount_str.endswith("%")
-        amount_value = self._to_number(amount_str.rstrip("%"))
+        amount_raw = amount_str.rstrip("%").replace(",", "")
+        amount_value = self._to_number(amount_raw)
         if amount_value is None:
             return None
 
@@ -838,6 +847,7 @@ class SlackSocketService:
             "order_type": order_type,
             "amount_value": amount_value,
             "amount_is_pct": amount_is_pct,
+            "amount_raw": amount_raw,
             "price": price,
         }
 
@@ -1113,6 +1123,14 @@ class SlackSocketService:
 
     def _min_order_amount(self, base_currency: str) -> float | None:
         return MIN_ORDER_BY_BASE.get(base_currency)
+
+    @staticmethod
+    def _decimal_places(value: str) -> int:
+        text = value.strip()
+        if "." not in text:
+            return 0
+        decimals = text.split(".", 1)[1].rstrip("0")
+        return len(decimals)
 
     def _tick_size(self, base_currency: str, price: float) -> float | None:
         if base_currency == "KRW":
