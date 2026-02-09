@@ -349,6 +349,9 @@ class SlackSocketService:
             watch_count = sum(1 for item in orders if item.get("state") == "watch")
             summary += f" | 상태 wait {wait_count}, watch {watch_count}"
 
+        if order_mode == "done":
+            orders = await self._enrich_order_values(orders)
+
         lines = [title, summary]
         for item in orders:
             lines.append(self._format_order_line(item))
@@ -1203,23 +1206,8 @@ class SlackSocketService:
         return self._fmt_amount(numeric)
 
     def _format_order_value(self, item: dict[str, Any], base_currency: str) -> str | None:
-        avg_price = self._to_float(item.get("avg_price"))
-        executed = self._to_float(item.get("executed_volume"))
-        price = self._to_float(item.get("price"))
-        volume = self._to_float(item.get("volume"))
-        ord_type = item.get("ord_type")
-
-        value: float | None = None
-        if avg_price > 0 and executed > 0:
-            value = avg_price * executed
-        elif ord_type == "price" and price > 0:
-            value = price
-        elif price > 0 and executed > 0:
-            value = price * executed
-        elif price > 0 and volume > 0:
-            value = price * volume
-
-        if value is None or value <= 0:
+        value = self._calc_order_value_candidate(item)
+        if value <= 0:
             return None
         return self._format_currency_amount(value, base_currency)
 
@@ -1235,6 +1223,68 @@ class SlackSocketService:
             if numeric > 0:
                 return self._format_currency_amount(numeric, base_currency)
         return None
+
+    def _calc_order_value_candidate(self, item: dict[str, Any]) -> float:
+        computed_value = self._to_float(item.get("computed_value"))
+        if computed_value > 0:
+            return computed_value
+
+        avg_price = self._to_float(item.get("avg_price"))
+        executed = self._to_float(item.get("executed_volume"))
+        price = self._to_float(item.get("price"))
+        volume = self._to_float(item.get("volume"))
+        ord_type = item.get("ord_type")
+
+        if avg_price > 0 and executed > 0:
+            return avg_price * executed
+        if ord_type == "price" and price > 0:
+            return price
+        if price > 0 and executed > 0:
+            return price * executed
+        if price > 0 and volume > 0:
+            return price * volume
+        return 0.0
+
+    async def _enrich_order_values(self, orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        enriched: list[dict[str, Any]] = []
+        for item in orders:
+            if item.get("state") != "done":
+                enriched.append(item)
+                continue
+            if self._calc_order_value_candidate(item) > 0:
+                enriched.append(item)
+                continue
+            uuid_ = item.get("uuid")
+            if not uuid_:
+                enriched.append(item)
+                continue
+            try:
+                detail = await upbit_client.get_order(uuid_=uuid_)
+            except UpbitAPIError:
+                enriched.append(item)
+                continue
+
+            trades = detail.get("trades") if isinstance(detail, dict) else None
+            total_value = 0.0
+            if isinstance(trades, list):
+                for trade in trades:
+                    if not isinstance(trade, dict):
+                        continue
+                    price = self._to_float(trade.get("price"))
+                    volume = self._to_float(trade.get("volume"))
+                    if price > 0 and volume > 0:
+                        total_value += price * volume
+
+            if total_value > 0:
+                updated = dict(item)
+                updated["computed_value"] = total_value
+                for key in ("avg_price", "executed_volume", "paid_fee"):
+                    if not updated.get(key) and isinstance(detail, dict) and detail.get(key) is not None:
+                        updated[key] = detail.get(key)
+                enriched.append(updated)
+            else:
+                enriched.append(item)
+        return enriched
 
     @staticmethod
     def _format_time(value: Any) -> str | None:
