@@ -341,7 +341,15 @@ class SlackSocketService:
             await self._post_message(channel, "표시할 주문이 없습니다.")
             return
 
-        lines = [title]
+        buy_count = sum(1 for item in orders if item.get("side") == "bid")
+        sell_count = sum(1 for item in orders if item.get("side") == "ask")
+        summary = f"요약: 총 {len(orders)}건 (매수 {buy_count} / 매도 {sell_count})"
+        if order_mode == "open":
+            wait_count = sum(1 for item in orders if item.get("state") == "wait")
+            watch_count = sum(1 for item in orders if item.get("state") == "watch")
+            summary += f" | 상태 wait {wait_count}, watch {watch_count}"
+
+        lines = [title, summary]
         for item in orders:
             market_name = item.get("market", "-")
             side = "매수" if item.get("side") == "bid" else "매도"
