@@ -51,14 +51,22 @@
 - API 엔드포인트: `app/api/routes/*.py`
 - 설정/상태: `app/core/config.py`, `app/core/state.py`
 - 스키마: `app/models/schemas.py`
-- 서비스: `app/services/upbit_client.py`(JWT 인증/주문·잔고/에러 변환), `app/services/telegram.py`(송수신), `app/services/telegram_bot.py`(폴링/명령 처리), `app/services/slack.py`(웹훅 알림)
-- UI: `app/ui/routes.py`, `app/ui/templates/*.html`, `app/ui/static/style.css`
+- 서비스: `app/services/upbit_client.py`(JWT 인증/주문·잔고/에러 변환), `app/services/telegram.py`(송수신), `app/services/telegram_bot.py`(폴링/명령 처리), `app/services/slack.py`(웹훅 알림), `app/services/slack_socket.py`(Socket Mode 명령)
+- UI: `app/ui/routes.py`, `app/ui/templates/*.html`, `app/ui/static/style.css`, `app/ui/static/dashboard.js`
 - 프로젝트 설정: `pyproject.toml`, `README.md`, `.env.example`, `.gitignore`
 
 ### 현재 동작하는 것
 - FastAPI 서버 기동 가능
 - `/api/health`, `/api/status`, `/api/config`, `/api/bot/start`, `/api/bot/stop` 등 기본 엔드포인트 존재
-- UI 템플릿(대시보드/설정) 정적 화면 구성
+- UI 템플릿(대시보드/설정) 구성 + 모니터링형 대시보드 화면 리뉴얼
+- 대시보드 실데이터 API `/api/dashboard` 추가
+  - 계좌/포지션/티커/주문내역 기반으로 카드/리스크/알림/심볼 펄스 집계
+  - Upbit 키 미설정 또는 API 실패 시 경고/알림을 함께 반환
+- 대시보드 프론트(`dashboard.js`)에서 15초 주기로 `/api/dashboard` 폴링 반영
+- 대시보드 Run/Pause 버튼으로 `/api/bot/start`, `/api/bot/stop` 호출 가능
+- Daily PnL을 체결(`done`) 기반 **일일 실현손익 추정치**로 계산
+  - 다중 페이지 체결 조회(최대 1000건) + 60초 캐시 적용
+  - 원가 누락/조회 상한 시 `warnings`에 보정 경고 제공
 - Upbit 개인 API 클라이언트(JWT 서명 + 주문/잔고 엔드포인트) 구현 완료
 - Upbit 조회용 API 라우트 추가(`/api/upbit/*`)
 - Upbit 오류를 HTTP 상태/메시지로 명확히 반환
@@ -97,6 +105,8 @@ uvicorn app.main:app --reload
   - `/api/upbit/accounts`, `/api/upbit/orders/open`, `/api/upbit/orders/closed`
 - Slack 알림 테스트 성공
   - `/api/slack/test`
+- 대시보드 API/화면 응답 확인
+  - `/api/dashboard`, `/` (실데이터 바인딩 + JS 로드)
 
 ### 테스트/운영 중 참고사항
 - Upbit Open API는 IP 화이트리스트를 사용하는 경우가 있어, 등록된 공인 IP에서만 호출 가능
@@ -109,20 +119,23 @@ uvicorn app.main:app --reload
 - 현재 민감 정보 파일 없음
 
 ## 8) 다음 해야 할 일 (우선순위)
-1) **텔레그램 기능 보강**
+1) **보안/접근 통제**
+   - `/api/*` 인증 토큰 또는 세션 도입
+   - Slack/Telegram 명령 권한 정책 강화
+2) **텔레그램 기능 보강**
    - /buy, /sell, /config 등 확장
    - 체결/오류 알림 자동 발송
-2) **Slack 알림/명령 확장**
+3) **Slack 알림/명령 확장**
    - 체결/오류/일일 요약 자동 발송 연결
    - 템플릿/포맷 통일
-3) **전략/리스크 엔진**
+4) **전략/리스크 엔진**
    - EMA/RSI 계산, 진입/청산
    - 트레일링 스탑
    - 일일 손실 한도 체크
-4) **UI 설정 저장/로드**
+5) **UI 설정 저장/로드**
    - UI 폼 → `/api/config` 연동
    - 설정 값 유효성 검증
-5) **주문/취소 연동 및 안전장치**
+6) **주문/취소 연동 및 안전장치**
    - 주문 생성/취소 함수 실제 사용 경로 추가
    - 실매매 보호(확인, 최소 주문 금액, 슬리피지 제한)
 
@@ -155,4 +168,4 @@ SLACK_TRADE_CHANNEL_IDS=
 ```
 
 ---
-마지막 업데이트: 2026-02-09
+마지막 업데이트: 2026-02-13

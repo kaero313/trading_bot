@@ -46,6 +46,8 @@
 - `/api/config`, `/api/status`, `/api/bot/start` 등은
   **in-memory 상태를 읽고/수정**하는 구조입니다.
 - `/api/upbit/*` 는 UpbitClient를 통해 **실제 Upbit REST API**로 요청합니다.
+- `/api/dashboard` 는 대시보드 집계 API로,
+  런타임 상태 + Upbit 계좌/티커/체결 데이터를 합쳐 카드/리스크/알림용 스냅샷을 반환합니다.
 
 ---
 
@@ -110,8 +112,15 @@ docs/                    # 문서
 - Upbit 잔고 조회 등 명령 처리
 
 ### 4.7 UI (`app/ui`)
-- 대시보드: 현재는 정적 화면
+- 대시보드: 모니터링형 화면 + `/api/dashboard` 실데이터 폴링(`app/ui/static/dashboard.js`)
+- 봇 제어 버튼: `/api/bot/start`, `/api/bot/stop` 호출
 - 설정 화면: 향후 `/api/config`와 연동 예정
+
+### 4.8 Dashboard 집계 API (`app/api/routes/dashboard.py`)
+- 응답: `synced_at`, `metrics`, `symbols`, `throughput`, `alerts`, `positions`, `risk`, `warnings`
+- `Daily PnL`은 체결(`done`) 기준 일일 실현손익 추정치로 계산
+- 계산 비용 완화를 위해 짧은 TTL 캐시를 사용
+- 조회 상한/원가 추정이 필요한 경우 `warnings`로 명시
 
 ---
 
@@ -132,6 +141,15 @@ POST /api/bot/stop  -> state.running = false
 ```
 GET /api/upbit/accounts -> UpbitClient -> Upbit REST API
    -> 응답/에러 반환 -> 클라이언트(JSON)
+```
+
+### D. 대시보드 집계 흐름
+```
+GET /api/dashboard
+  -> state + config 조회
+  -> Upbit 계좌/티커/체결 조회
+  -> 실현/평가 손익 및 리스크 지표 계산
+  -> 대시보드(JSON) 반환
 ```
 
 ---
@@ -185,9 +203,10 @@ GET /api/upbit/accounts -> UpbitClient -> Upbit REST API
 
 ## 9) 현재 아키텍처의 한계
 - 실제 매매 루프/전략 엔진 미구현
-- UI는 정적 (설정 저장 연결 필요)
+- UI 설정 저장 연결 미완료
 - 인증/보안 미구현
 - 데이터 영속화 없음
+- 실현손익은 체결 이력 기반 추정치로, 장기 원가 정합성은 DB 영속화 이후 보강 필요
 
 ---
 

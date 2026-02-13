@@ -73,6 +73,57 @@
 }
 ```
 
+## GET /api/dashboard
+- 설명: 대시보드 실시간 집계 스냅샷 반환
+- 데이터 소스:
+  - 런타임 상태(`state`)
+  - Upbit 계좌/티커/체결 내역
+  - 현재 설정(`BotConfig`)
+- 응답 주요 필드:
+  - `synced_at` (str): 서버 집계 시각(KST)
+  - `strategy_text` (str): 전략 요약 문자열
+  - `schedule_text` (str): 스케줄 요약 문자열
+  - `status` (obj): 봇 상태 + heartbeat age
+  - `metrics` (obj):
+    - `total_asset_krw` (float)
+    - `daily_realized_pnl_krw` (float) — 체결(`done`) 기준 일일 실현손익 추정치
+    - `unrealized_pnl_krw` (float) — 보유 포지션 평가손익
+    - `capital_usage_pct` (float)
+    - `capital_limit_pct` (float)
+    - `wins` / `losses` (int) — 금일 실현손익 기준
+  - `symbols` (list): 심볼 변동률/강도
+  - `throughput` (list[int]): 최근 12시간 시간대별 주문 처리량
+  - `alerts` (list): 대시보드 알림
+  - `positions` (list): 오픈 포지션 요약
+  - `risk` (obj): 자본/손실/포지션 리스크 지표
+  - `warnings` (list[str]): 데이터 보정/조회 제한 경고
+- 참고:
+  - `.env`에 Upbit 키가 없으면 기본값 + 경고 알림(`Upbit Key Missing`)을 반환
+  - 실현손익 계산은 최근 체결 내역 조회 상한(페이지 수)에 영향을 받을 수 있음
+
+응답 예시(키 미설정 시):
+```json
+{
+  "synced_at": "14:15:46 KST",
+  "strategy_text": "EMA 12/26 + RSI 14 (50+)",
+  "schedule_text": "KST 24H",
+  "metrics": {
+    "daily_realized_pnl_krw": 0.0
+  },
+  "alerts": [
+    {
+      "level": "warn",
+      "title": "Upbit Key Missing",
+      "message": "Set UPBIT_ACCESS_KEY and UPBIT_SECRET_KEY in .env",
+      "minutes_ago": null
+    }
+  ],
+  "warnings": [
+    "Upbit keys not configured"
+  ]
+}
+```
+
 ## GET /api/config
 - 설명: 현재 봇 설정 반환
 - 응답 스키마(BotConfig):
