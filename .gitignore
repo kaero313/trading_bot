@@ -2,6 +2,17 @@
 __pycache__/
 *.pyc
 .venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
 
 # Env
 .env
@@ -18,6 +29,12 @@ logs/
 *.sqlite3
 data/
 
+# Build / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
 # Secrets / keys
 secrets/
 *.pem
@@ -26,3 +43,9 @@ secrets/
 *.pfx
 *.crt
 *.cer
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
