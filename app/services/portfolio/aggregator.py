@@ -49,22 +49,28 @@ class PortfolioService:
             balance = _to_float(account.get("balance"))
             locked = _to_float(account.get("locked"))
             qty = balance + locked
-            avg_buy_price = _to_float(account.get("avg_buy_price"))
+            raw_avg_buy_price = _to_float(account.get("avg_buy_price"))
 
             if currency == "KRW":
                 current_price = 1.0
-                total_value = qty
-                pnl_percentage = 0.0
-                pnl_amount = 0.0
+                avg_buy_price = raw_avg_buy_price if raw_avg_buy_price > 0 else 1.0
             else:
                 market = f"KRW-{currency}"
                 current_price = ticker_map.get(market, 0.0)
-                total_value = qty * current_price if current_price > 0 else 0.0
-                if avg_buy_price > 0 and current_price > 0:
-                    pnl_percentage = ((current_price - avg_buy_price) / avg_buy_price) * 100.0
-                else:
-                    pnl_percentage = 0.0
-                pnl_amount = (current_price - avg_buy_price) * qty if current_price > 0 else 0.0
+                avg_buy_price = raw_avg_buy_price
+
+            invested = qty * avg_buy_price
+            total_value = qty * current_price
+            pnl_amount = total_value - invested
+
+            try:
+                pnl_percentage = (
+                    ((current_price - avg_buy_price) / avg_buy_price) * 100.0
+                    if avg_buy_price > 0
+                    else 0.0
+                )
+            except ZeroDivisionError:
+                pnl_percentage = 0.0
 
             items.append(
                 AssetItem(
